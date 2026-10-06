@@ -1,7 +1,7 @@
 #pragma once
 #include <glm/vec3.hpp>
 
-namespace nut {
+namespace isola {
 
 /// All settings of the procedural island: shape, erosion, ocean, ground materials and fog.
 /// Edit them through Engine::terrain(), then call Engine::regenerateWorld() (the ocean, materials
@@ -60,4 +60,4 @@ struct TerrainParams {
     glm::vec3 fogColor{0.66f, 0.78f, 0.90f};
 };
 
-} // namespace nut
+} // namespace isola

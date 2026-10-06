@@ -3,9 +3,9 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include <nut/Graphics.hpp>
+#include <isola/Graphics.hpp>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // GPU timings of named passes (ring-buffered queries, so reading them never stalls the GPU)
 class GpuTimers {
@@ -67,4 +67,4 @@ private:
     GLuint vao_ = 0;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

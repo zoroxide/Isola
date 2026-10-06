@@ -1,3 +1,3 @@
-add_executable(nut-demo demo/main.cpp)
-target_link_libraries(nut-demo PRIVATE nut::nut)
-set_target_properties(nut-demo PROPERTIES CXX_EXTENSIONS OFF)
+add_executable(isola-demo demo/main.cpp)
+target_link_libraries(isola-demo PRIVATE isola::isola)
+set_target_properties(isola-demo PROPERTIES CXX_EXTENSIONS OFF)

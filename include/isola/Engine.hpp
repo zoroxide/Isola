@@ -1,12 +1,12 @@
 #pragma once
-#include <nut/Config.hpp>
-#include <nut/Export.hpp>
-#include <nut/Foliage.hpp>
-#include <nut/Graphics.hpp>
-#include <nut/Input.hpp>
-#include <nut/Map.hpp>
-#include <nut/Sky.hpp>
-#include <nut/Terrain.hpp>
+#include <isola/Config.hpp>
+#include <isola/Export.hpp>
+#include <isola/Foliage.hpp>
+#include <isola/Graphics.hpp>
+#include <isola/Input.hpp>
+#include <isola/Map.hpp>
+#include <isola/Sky.hpp>
+#include <isola/Terrain.hpp>
 
 #include <glm/vec3.hpp>
 
@@ -15,7 +15,7 @@
 #include <functional>
 #include <memory>
 
-namespace nut {
+namespace isola {
 
 namespace detail {
 class EngineCore;
@@ -54,17 +54,17 @@ struct PlayerState {
 /// movable; create it on the stack or in a std::unique_ptr.
 ///
 /// \code
-/// nut::Engine engine{config};
-/// engine.onUpdate([](nut::Engine& e, const nut::FrameInfo& f) { ... });
+/// isola::Engine engine{config};
+/// engine.onUpdate([](isola::Engine& e, const isola::FrameInfo& f) { ... });
 /// engine.run();
 /// \endcode
-class NUT_API Engine {
+class ISOLA_API Engine {
 public:
     using UpdateCallback = std::function<void(Engine&, const FrameInfo&)>;
     using KeyCallback = std::function<void(Engine&, Key, KeyAction)>;
 
     /// Creates the window, compiles the shaders and builds the start map.
-    /// \throws nut::Error when the window, OpenGL context, shaders or start map can't be set up.
+    /// \throws isola::Error when the window, OpenGL context, shaders or start map can't be set up.
     explicit Engine(const EngineConfig& config = {});
     ~Engine();
 
@@ -88,7 +88,7 @@ public:
     // --- World -----------------------------------------------------------------------------
     /// Switches the world. Islands are generated from their preset (keeping the current seed);
     /// Sponza is loaded from disk the first time.
-    /// \throws nut::Error if the map's files can't be loaded.
+    /// \throws isola::Error if the map's files can't be loaded.
     void loadMap(Map map);
     [[nodiscard]] Map currentMap() const noexcept;
 
@@ -105,7 +105,7 @@ public:
     /// Loads an equirectangular panorama (.hdr, .png, .jpg, .bmp) or a folder of cube faces
     /// (right/left/top/bottom/front/back). An HDR panorama also lights the scene: the sun's
     /// direction and colour are found in the image.
-    /// \throws nut::Error if it can't be loaded.
+    /// \throws isola::Error if it can't be loaded.
     void setSky(const std::filesystem::path& panorama);
     /// The built-in gradient sky with procedural clouds.
     void setProceduralSky();
@@ -142,4 +142,4 @@ private:
     std::unique_ptr<detail::EngineCore> core_;
 };
 
-} // namespace nut
+} // namespace isola

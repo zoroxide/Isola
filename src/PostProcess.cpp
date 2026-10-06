@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // ---------------------------------------------------------------------------
 // GPU timers
@@ -249,4 +249,4 @@ void PostProcess::endScene(const GraphicsSettings& g, GLuint outputFbo, const gl
     glEnable(GL_DEPTH_TEST);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

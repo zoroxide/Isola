@@ -9,7 +9,7 @@
 #include <iostream>
 #include <random>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -738,4 +738,4 @@ void Foliage::drawGrass(const Terrain& terrain, const FoliageParams& params, con
     (void)time;
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

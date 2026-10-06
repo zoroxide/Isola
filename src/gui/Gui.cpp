@@ -12,7 +12,7 @@
 #include <filesystem>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 GUI::GUI(EngineCore* engine) : engine_(engine), window_(nullptr), initialized_(false) {}
 
@@ -582,4 +582,4 @@ void GUI::render() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

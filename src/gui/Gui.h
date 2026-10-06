@@ -4,7 +4,7 @@
 
 struct GLFWwindow;
 
-namespace nut::detail {
+namespace isola::detail {
 
 class EngineCore;
 
@@ -41,4 +41,4 @@ private:
     bool initialized_;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

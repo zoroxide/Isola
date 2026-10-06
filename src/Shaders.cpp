@@ -3,7 +3,7 @@
 #include <sstream>
 #include <iostream>
 
-namespace nut::detail {
+namespace isola::detail {
 
 static std::string loadFile(const char* path) {
     std::ifstream in(path);
@@ -101,4 +101,4 @@ GLuint ShaderManager::get(const std::string& name) const {
     return (it != programs_.end()) ? it->second.id : 0;
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

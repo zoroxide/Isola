@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class Terrain;
 
@@ -135,4 +135,4 @@ private:
     mutable int drawnHouses_ = 0;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

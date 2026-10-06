@@ -1,9 +1,9 @@
-#include <nut/Map.hpp>
+#include <isola/Map.hpp>
 
 #include <cctype>
 #include <string>
 
-namespace nut {
+namespace isola {
 
 namespace {
 constexpr std::string_view kNames[] = {
@@ -39,4 +39,4 @@ std::optional<Map> mapFromName(std::string_view name) noexcept {
     return std::nullopt;
 }
 
-} // namespace nut
+} // namespace isola

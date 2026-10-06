@@ -5,7 +5,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace nut::detail {
+namespace isola::detail {
 
 namespace {
 std::string lower(std::string s) {
@@ -139,7 +139,7 @@ void GpuProfile::writeReport(const std::string& path, const GpuInfo& gpu, int ch
     static const char* names[4] = { "Potato", "Low", "Medium", "High" };
     std::ofstream out(path);
     std::time_t now = std::time(nullptr);
-    out << "Nut GPU report - " << std::ctime(&now) << "\n";
+    out << "Isola GPU report - " << std::ctime(&now) << "\n";
     out << "Vendor:    " << gpu.vendorStr << " (" << gpu.vendorName() << ")\n";
     out << "Renderer:  " << gpu.renderer << "\n";
     out << "OpenGL:    " << gpu.version << "\n";
@@ -159,4 +159,4 @@ void GpuProfile::writeReport(const std::string& path, const GpuInfo& gpu, int ch
     out << "Shader compiler messages:\n" << (shaderLog.empty() ? std::string("  (none)\n") : shaderLog) << "\n";
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

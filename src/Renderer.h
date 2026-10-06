@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class Terrain;
 class Skybox;
@@ -28,4 +28,4 @@ private:
     Skybox* sky_ = nullptr;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

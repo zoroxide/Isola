@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // What we learn about a panorama when it is loaded (used to light the scene to match the sky)
 struct SkyAnalysis {
@@ -71,4 +71,4 @@ private:
     SkyAnalysis analysis_;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

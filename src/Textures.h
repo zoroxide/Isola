@@ -2,7 +2,7 @@
 #include <GL/glew.h>
 #include <string>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // Procedurally generated helper textures (created once at startup)
 namespace Textures {
@@ -19,4 +19,4 @@ GLuint loadMaterialArray(const std::string& dir, const char* const* names, int c
                          bool normals, float anisotropy);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

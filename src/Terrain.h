@@ -1,14 +1,14 @@
 #pragma once
-#include <nut/Terrain.hpp>
+#include <isola/Terrain.hpp>
 #include <glm/glm.hpp>
 #include <GL/glew.h>
 #include <string>
 #include <vector>
 #include <functional>
 
-namespace nut::detail {
+namespace isola::detail {
 
-// Island presets, in nut::Map order (Map::BigIsland = 0 ...)
+// Island presets, in isola::Map order (Map::BigIsland = 0 ...)
 TerrainParams islandPreset(int id);
 const char* const* islandPresetNames(int& count);
 
@@ -131,4 +131,4 @@ private:
     float tile_ = 22.0f;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

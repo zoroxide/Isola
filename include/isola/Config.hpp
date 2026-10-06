@@ -1,15 +1,15 @@
 #pragma once
-#include <nut/Graphics.hpp>
-#include <nut/Map.hpp>
+#include <isola/Graphics.hpp>
+#include <isola/Map.hpp>
 
 #include <filesystem>
 #include <optional>
 #include <string>
 
-namespace nut {
+namespace isola {
 
 struct WindowConfig {
-    std::string title = "Nut";
+    std::string title = "Isola";
     int width = 1280;           ///< ignored when fullscreen
     int height = 720;
     bool fullscreen = false;    ///< fullscreen on the primary monitor at its desktop resolution
@@ -41,4 +41,4 @@ struct EngineConfig {
     bool quitOnEscape = true;
 };
 
-} // namespace nut
+} // namespace isola

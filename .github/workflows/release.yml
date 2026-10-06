@@ -44,7 +44,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: dist/Nut-linux-x86_64.tar.gz
+          path: dist/Isola-linux-x86_64.tar.gz
           retention-days: 7
 
   windows:
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/Nut-windows-x86_64.zip
+          path: dist/Isola-windows-x86_64.zip
           retention-days: 7
 
   release:
@@ -113,12 +113,12 @@ jobs:
               echo '```'
               echo
             fi
-            echo "**Windows:** unzip \`Nut-windows-x86_64.zip\` and run \`nut-demo.exe\` (or \`nut-demo (windowed).bat\`)."
+            echo "**Windows:** unzip \`Isola-windows-x86_64.zip\` and run \`isola-demo.exe\` (or \`isola-demo (windowed).bat\`)."
             echo
-            echo "**Linux:** \`tar xzf Nut-linux-x86_64.tar.gz\` and run \`Nut-linux-x86_64/nut-demo.sh\` (add \`--windowed\` for a window)."
+            echo "**Linux:** \`tar xzf Isola-linux-x86_64.tar.gz\` and run \`Isola-linux-x86_64/isola-demo.sh\` (add \`--windowed\` for a window)."
             echo "Needs an OpenGL 3.3 driver and glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+)."
           } > notes.md
-          gh release create "$tag" dist/Nut-linux-x86_64.tar.gz dist/Nut-windows-x86_64.zip \
+          gh release create "$tag" dist/Isola-linux-x86_64.tar.gz dist/Isola-windows-x86_64.zip \
             --target "$GITHUB_SHA" \
             --title "Build ${GITHUB_RUN_NUMBER} (${short})" \
             --notes-file notes.md \

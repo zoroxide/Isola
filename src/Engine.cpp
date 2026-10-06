@@ -1,6 +1,6 @@
-// nut::Engine: the public facade over detail::EngineCore.
-#include <nut/Engine.hpp>
-#include <nut/Error.hpp>
+// isola::Engine: the public facade over detail::EngineCore.
+#include <isola/Engine.hpp>
+#include <isola/Error.hpp>
 
 #include "EngineCore.h"
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <utility>
 
-namespace nut {
+namespace isola {
 
-// nut::Key / KeyAction values are GLFW's, so input passes through without a lookup table
+// isola::Key / KeyAction values are GLFW's, so input passes through without a lookup table
 static_assert(static_cast<int>(Key::Space) == GLFW_KEY_SPACE);
 static_assert(static_cast<int>(Key::Num0) == GLFW_KEY_0 && static_cast<int>(Key::Num9) == GLFW_KEY_9);
 static_assert(static_cast<int>(Key::A) == GLFW_KEY_A && static_cast<int>(Key::Z) == GLFW_KEY_Z);
@@ -64,7 +64,7 @@ bool Engine::isKeyDown(Key key) const noexcept { return core_->isKeyDown(static_
 // --- World -----------------------------------------------------------------------------------
 void Engine::loadMap(Map map) {
     if (!core_->selectMap(static_cast<int>(map)))
-        throw Error("Nut: could not load the map " + std::string(toString(map)));
+        throw Error("Isola: could not load the map " + std::string(toString(map)));
 }
 
 Map Engine::currentMap() const noexcept { return static_cast<Map>(core_->currentMap()); }
@@ -90,7 +90,7 @@ void Engine::setSky(const std::filesystem::path& panorama) {
         return;
     }
     if (!core_->panorama(panorama.string()))
-        throw Error("Nut: could not load the sky " + panorama.string());
+        throw Error("Isola: could not load the sky " + panorama.string());
 }
 
 void Engine::setProceduralSky() { core_->panorama(""); }
@@ -173,4 +173,4 @@ void Engine::setSettingsPanelVisible(bool visible) noexcept { core_->setGuiVisib
 
 bool Engine::settingsPanelVisible() const noexcept { return core_->isGuiVisible(); }
 
-} // namespace nut
+} // namespace isola

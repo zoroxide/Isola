@@ -11,7 +11,7 @@
 #include <vector>
 #include <stb_image.h>
 
-namespace nut::detail {
+namespace isola::detail {
 
 Skybox::~Skybox() {
     if (skyVBO_) glDeleteBuffers(1, &skyVBO_);
@@ -336,4 +336,4 @@ bool Skybox::loadFromPath(const std::string& path) {
     return true;
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

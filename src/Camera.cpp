@@ -1,7 +1,7 @@
 #include "Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-namespace nut::detail {
+namespace isola::detail {
 
 Camera::Camera()
     : position_(0.0f, 6.0f, 12.0f), yaw_(-90.0f), pitch_(-15.0f) {}
@@ -35,4 +35,4 @@ glm::mat4 Camera::getProj(float fovDeg, float aspect, float nearZ, float farZ) c
     return glm::perspective(glm::radians(fovDeg), aspect, nearZ, farZ);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

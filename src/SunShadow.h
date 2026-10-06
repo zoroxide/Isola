@@ -2,7 +2,7 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class Terrain;
 
@@ -29,4 +29,4 @@ private:
     glm::vec3 lastSun_{0.0f};
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

@@ -2,7 +2,7 @@
 #include "Terrain.h"
 #include <cmath>
 
-namespace nut::detail {
+namespace isola::detail {
 
 SunShadow::~SunShadow() {
     if (tex_) glDeleteTextures(1, &tex_);
@@ -77,4 +77,4 @@ void SunShadow::bind(GLuint prog, int unit, float halfExtent, float strength, bo
     glActiveTexture(GL_TEXTURE0);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

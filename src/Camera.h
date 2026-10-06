@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class Camera {
 public:
@@ -30,4 +30,4 @@ private:
     float pitch_;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

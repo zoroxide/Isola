@@ -1,6 +1,6 @@
 #pragma once
 
-namespace nut {
+namespace isola {
 
 /// Quality tiers, from very old / low-end GPUs to modern ones.
 enum class QualityTier : int { Potato = 0, Low = 1, Medium = 2, High = 3 };
@@ -100,4 +100,4 @@ struct GraphicsSettings {
     static GraphicsSettings forTier(QualityTier t) { return forTier(static_cast<int>(t)); }
 };
 
-} // namespace nut
+} // namespace isola

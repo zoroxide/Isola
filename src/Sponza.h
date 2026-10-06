@@ -8,7 +8,7 @@
 #include <vector>
 #include "TriangleBvh.h"
 
-namespace nut::detail {
+namespace isola::detail {
 
 // The Sponza palace map (Crytek Sponza, glTF from the Khronos sample assets in assets/maps/sponza).
 // Loaded on first use. Renders the PBR materials (base colour, normal, metal/roughness, alpha-masked
@@ -112,4 +112,4 @@ private:
     Bake current_;   // CPU copy of the uploaded volume (next bounce, eye adaptation)
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

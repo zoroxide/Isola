@@ -2,7 +2,7 @@
 #include "Terrain.h"
 #include "Skybox.h"
 
-namespace nut::detail {
+namespace isola::detail {
 
 void Renderer::drawFrame(const glm::mat4& view, const glm::mat4& proj, const glm::mat4& model,
                          const glm::mat4& invView, const glm::mat4& invProj,
@@ -15,4 +15,4 @@ void Renderer::drawFrame(const glm::mat4& view, const glm::mat4& proj, const glm
     if (sky_) sky_->draw(invView, invProj, hasSkybox, time, cloudEnabled, cloudSpeed, cloudScale, cloudOpacity);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

@@ -1,7 +1,7 @@
 #pragma once
 #include <glm/vec3.hpp>
 
-namespace nut {
+namespace isola {
 
 /// A manually placed sun (used instead of the sun found in an HDR sky).
 struct SunSettings {
@@ -22,4 +22,4 @@ struct SkySettings {
     float cloudOpacity = 0.55f;
 };
 
-} // namespace nut
+} // namespace isola

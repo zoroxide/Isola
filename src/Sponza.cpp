@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <iostream>
 
-namespace nut::detail {
+namespace isola::detail {
 
 namespace {
 enum TexKind { ALBEDO = 0, NORMAL = 1, METAL_ROUGH = 2 };
@@ -879,4 +879,4 @@ float Sponza::headroom(const glm::vec3& eye) const {
     return 1e9f;
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

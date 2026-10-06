@@ -12,7 +12,7 @@
 #include <stb_image.h>
 #include "Textures.h"
 
-namespace nut::detail {
+namespace isola::detail {
 
 Terrain::~Terrain() {
     if (vbo_) glDeleteBuffers(1, &vbo_);
@@ -833,4 +833,4 @@ float Terrain::getHeightAt(float wx, float wz) const {
     return h;
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

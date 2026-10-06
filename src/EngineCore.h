@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include <nut/Config.hpp>
-#include <nut/Graphics.hpp>
+#include <isola/Config.hpp>
+#include <isola/Graphics.hpp>
 
 #include "Camera.h"
 #include "Foliage.h"
@@ -27,12 +27,12 @@
 #include "Terrain.h"
 #include "Village.h"
 
-namespace nut::detail {
+namespace isola::detail {
 
 class GUI;
 using Clock = std::chrono::high_resolution_clock;
 
-// The engine's implementation: window, subsystems, player and main loop. nut::Engine is the
+// The engine's implementation: window, subsystems, player and main loop. isola::Engine is the
 // public facade over it; the settings panel (GUI) uses this class directly.
 class EngineCore {
 public:
@@ -268,4 +268,4 @@ private:
     bool guiVisible_ = false;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

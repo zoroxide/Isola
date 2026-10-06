@@ -9,7 +9,7 @@
 #include <iostream>
 #include <random>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // ===========================================================================
 // Geometry toolkit
@@ -1595,4 +1595,4 @@ void Village::setShadowResolution(int res) {
     shadowBuilt_ = false;   // rebuilt at the new size next frame
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

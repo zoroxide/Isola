@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 #include <stb_image.h>
 
-namespace nut::detail {
+namespace isola::detail {
 
 namespace {
 // Periodic value noise: the lattice wraps every `period` cells so the texture tiles seamlessly
@@ -188,4 +188,4 @@ void Textures::setAnisotropy(GLuint tex, GLenum target, float amount) {
     glTexParameterf(target, 0x84FE /*GL_TEXTURE_MAX_ANISOTROPY_EXT*/, std::max(1.0f, std::min(amount, maxAniso)));
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

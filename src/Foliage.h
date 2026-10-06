@@ -1,11 +1,11 @@
 #pragma once
-#include <nut/Foliage.hpp>
+#include <isola/Foliage.hpp>
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class Terrain;
 
@@ -87,4 +87,4 @@ private:
     GLuint grassVAO_ = 0, grassEBO_ = 0, grassFarVAO_ = 0, grassFarEBO_ = 0;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

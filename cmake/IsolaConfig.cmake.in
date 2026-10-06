@@ -13,5 +13,5 @@ if(NOT TARGET glm::glm)
     set_target_properties(glm::glm PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${GLM_INCLUDE_DIR}")
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/NutTargets.cmake")
-check_required_components(Nut)
+include("${CMAKE_CURRENT_LIST_DIR}/IsolaTargets.cmake")
+check_required_components(Isola)

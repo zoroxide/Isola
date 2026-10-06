@@ -22,7 +22,7 @@
 #include <iostream>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 EngineCore* EngineCore::s_instance_ = nullptr;
 
@@ -54,18 +54,18 @@ bool EngineCore::init(const EngineConfig &config, std::string &error) {
   namespace fs = std::filesystem;
   std::error_code ec;
   if (!fs::is_regular_file(paths_.shaders / "common.glsl", ec)) {
-    error = "Nut: shader directory not found: " + fs::absolute(paths_.shaders, ec).string() +
+    error = "Isola: shader directory not found: " + fs::absolute(paths_.shaders, ec).string() +
             " (set EngineConfig::paths.shaders)";
     return false;
   }
   if (!fs::is_directory(paths_.assets, ec)) {
-    error = "Nut: asset directory not found: " + fs::absolute(paths_.assets, ec).string() +
+    error = "Isola: asset directory not found: " + fs::absolute(paths_.assets, ec).string() +
             " (set EngineConfig::paths.assets)";
     return false;
   }
 
   if (!glfwInit()) {
-    error = "Nut: could not initialise GLFW";
+    error = "Isola: could not initialise GLFW";
     return false;
   }
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -85,7 +85,7 @@ bool EngineCore::init(const EngineConfig &config, std::string &error) {
   }
   window_ = glfwCreateWindow(width, height, config.window.title.c_str(), monitor, nullptr);
   if (!window_) {
-    error = "Nut: could not create a window with an OpenGL 3.3 core context";
+    error = "Isola: could not create a window with an OpenGL 3.3 core context";
     glfwTerminate();
     return false;
   }
@@ -102,7 +102,7 @@ bool EngineCore::init(const EngineConfig &config, std::string &error) {
     glewErr = GLEW_OK;
 #endif
   if (glewErr != GLEW_OK) {
-    error = std::string("Nut: glewInit failed: ") + reinterpret_cast<const char *>(glewGetErrorString(glewErr));
+    error = std::string("Isola: glewInit failed: ") + reinterpret_cast<const char *>(glewGetErrorString(glewErr));
     return false;
   }
 
@@ -179,7 +179,7 @@ bool EngineCore::init(const EngineConfig &config, std::string &error) {
   sponzaShader_ = program("sponza", "sponza_vert.glsl", "sponza_frag.glsl");
   sponzaShadowShader_ = program("sponzaShadow", "sponza_shadow_vert.glsl", "sponza_shadow_frag.glsl");
   if (!shaderProgram_ || !skyShader_ || !terrainShader_ || !waterShader_ || !villageShader_ || !pp.composite) {
-    error = "Nut: shader compilation failed:\n" + shaders_.log();
+    error = "Isola: shader compilation failed:\n" + shaders_.log();
     return false;
   }
   noiseTex_ = Textures::createNoise(256);
@@ -210,11 +210,11 @@ bool EngineCore::init(const EngineConfig &config, std::string &error) {
   setupSamplerUnits();
 
   if (!config.sky.empty() && !panorama(config.sky.string())) {
-    error = "Nut: could not load the sky " + config.sky.string();
+    error = "Isola: could not load the sky " + config.sky.string();
     return false;
   }
   if (!isIsland(config.startMap) && !selectMap(startMap)) {
-    error = std::string("Nut: could not load the map ") + mapName(startMap);
+    error = std::string("Isola: could not load the map ") + mapName(startMap);
     return false;
   }
   writeGpuReport();
@@ -605,7 +605,7 @@ void EngineCore::run() {
       if (gui_) gui_->renderOverlayMessage(std::string("Loading ") + mapName(map) + "...", "");
       glfwSwapBuffers(window_);
       if (!selectMap(map))
-        std::cerr << "Nut: could not load the map " << mapName(map) << "\n";
+        std::cerr << "Isola: could not load the map " << mapName(map) << "\n";
       lastFrame_ = Clock::now();   // don't count the loading time as a frame
       continue;
     }
@@ -1118,4 +1118,4 @@ void EngineCore::placePlayerOnLand() {
   foliage_.resolveCollision(cameraPos_); // don't start inside a tree trunk
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

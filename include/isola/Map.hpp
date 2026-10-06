@@ -1,11 +1,11 @@
 #pragma once
-#include <nut/Export.hpp>
+#include <isola/Export.hpp>
 
 #include <array>
 #include <optional>
 #include <string_view>
 
-namespace nut {
+namespace isola {
 
 /// The worlds the engine can show. Island maps are procedurally generated from presets
 /// (see TerrainParams); Sponza Palace is the Crytek Sponza atrium, loaded on first use from
@@ -31,9 +31,9 @@ inline constexpr std::array<Map, 8> kAllMaps{
 constexpr bool isIsland(Map map) noexcept { return map != Map::SponzaPalace; }
 
 /// Display name, e.g. "Rolling Hills".
-NUT_API std::string_view toString(Map map) noexcept;
+ISOLA_API std::string_view toString(Map map) noexcept;
 
 /// Finds a map by (part of) its display name, ignoring case: "sponza", "alpine", "big island".
-NUT_API std::optional<Map> mapFromName(std::string_view name) noexcept;
+ISOLA_API std::optional<Map> mapFromName(std::string_view name) noexcept;
 
-} // namespace nut
+} // namespace isola

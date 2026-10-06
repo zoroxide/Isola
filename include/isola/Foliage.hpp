@@ -1,6 +1,6 @@
 #pragma once
 
-namespace nut {
+namespace isola {
 
 /// Grass and tree settings. Changes to grass and wind apply live; tree placement changes apply
 /// when the world is regenerated.
@@ -22,4 +22,4 @@ struct FoliageParams {
     float windStrength = 0.6f;
 };
 
-} // namespace nut
+} // namespace isola

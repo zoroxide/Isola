@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace nut::detail {
+namespace isola::detail {
 
 // What GPU are we running on? Used to pick a starting quality tier before the benchmark,
 // and written to gpu_report.txt so performance problems on other machines can be diagnosed.
@@ -31,4 +31,4 @@ void writeReport(const std::string& path, const GpuInfo& gpu, int chosenTier, bo
                  const std::string& shaderLog);
 }
 
-} // namespace nut::detail
+} // namespace isola::detail

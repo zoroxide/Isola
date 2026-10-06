@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <GL/glew.h>
 
-namespace nut::detail {
+namespace isola::detail {
 
 class ShaderManager {
 public:
@@ -32,4 +32,4 @@ private:
     std::string defines_, log_;
 };
 
-} // namespace nut::detail
+} // namespace isola::detail

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace nut {
+namespace isola {
 
 /// Keyboard keys (US layout positions). The values match GLFW's key codes.
 enum class Key : int {
@@ -20,4 +20,4 @@ enum class Key : int {
 
 enum class KeyAction : int { Release = 0, Press = 1, Repeat = 2 };
 
-} // namespace nut
+} // namespace isola
