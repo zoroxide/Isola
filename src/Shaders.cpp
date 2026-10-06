@@ -1,4 +1,5 @@
 #include "Shaders.h"
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -12,18 +13,21 @@ static std::string loadFile(const char* path) {
 }
 
 // Expands `#include "file"` lines (paths relative to the including file) so shaders can
-// share common code such as fog, sky and shadow functions.
+// share common code such as fog, sky and shadow functions. Paths may use either separator
+// (std::filesystem builds them with '\\' on Windows).
 static std::string preprocess(const std::string& path, int depth = 0) {
     std::string src = loadFile(path.c_str());
     if (src.empty() || depth > 8) return src;
-    std::string dir = path.substr(0, path.find_last_of('/') + 1);
+    const std::filesystem::path dir = std::filesystem::path(path).parent_path();
     std::stringstream in(src), out;
     std::string line;
     while (std::getline(in, line)) {
         size_t p = line.find("#include");
         size_t q0 = line.find('"'), q1 = line.rfind('"');
         if (p != std::string::npos && line.find_first_not_of(" \t") == p && q0 != std::string::npos && q1 > q0) {
-            out << preprocess(dir + line.substr(q0 + 1, q1 - q0 - 1), depth + 1) << "\n";
+            std::string included = preprocess((dir / line.substr(q0 + 1, q1 - q0 - 1)).string(), depth + 1);
+            if (included.empty()) return {};   // missing include: fail the whole shader
+            out << included << "\n";
         } else {
             out << line << "\n";
         }
@@ -39,7 +43,10 @@ ShaderManager::~ShaderManager(){
 
 GLuint ShaderManager::compileShaderFromFile(const char* path, GLenum type) {
     std::string src = preprocess(path);
-    if(src.empty()) return 0;
+    if(src.empty()) {
+        log_ += std::string("ERROR ") + path + ": could not read the shader or one of its #include files\n";
+        return 0;
+    }
     // Quality defines go right after the #version line
     if (!defines_.empty()) {
         size_t eol = src.find('\n');
