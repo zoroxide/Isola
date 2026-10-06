@@ -1,29 +1,13 @@
 #pragma once
+#include <nut/Foliage.hpp>
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
+namespace nut::detail {
+
 class Terrain;
-
-// User-tweakable vegetation settings
-struct FoliageParams {
-    // Grass (generated on the GPU around the player every frame)
-    bool  grassEnabled = true;
-    float grassDensity = 1.0f;     // multiplier on the number of blades
-    float grassRadius = 45.0f;     // metres; blades thin out towards this distance
-    float grassHeight = 0.5f;      // metres (average blade)
-    bool  flowers = true;
-
-    // Trees (placed once per terrain generation)
-    bool  treesEnabled = true;
-    float treeDensity = 0.55f;     // 0..1, how much of the grassland becomes forest
-    float treeDistance = 1200.0f;  // draw distance in metres
-    float treeDetailDistance = 90.0f; // beyond this, trees are drawn as billboards (impostors)
-
-    // Wind (direction follows the ocean wind)
-    float windStrength = 0.6f;
-};
 
 struct FoliagePrograms {
     GLuint grass = 0, tree = 0, treeBake = 0, impostor = 0;
@@ -102,3 +86,5 @@ private:
     // Grass: attribute-less clumps drawn per visible tile
     GLuint grassVAO_ = 0, grassEBO_ = 0, grassFarVAO_ = 0, grassFarEBO_ = 0;
 };
+
+} // namespace nut::detail

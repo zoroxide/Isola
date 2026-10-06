@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cmath>
 
+namespace nut::detail {
+
 namespace {
 struct Box {
     glm::vec3 mn{1e30f}, mx{-1e30f};
@@ -197,3 +199,5 @@ glm::vec3 TriangleBvh::closestPoint(const glm::vec3& p, const glm::vec3& a, cons
     float denom = 1.0f / (va + vb + vc);
     return a + ab * (vb * denom) + ac * (vc * denom);
 }
+
+} // namespace nut::detail

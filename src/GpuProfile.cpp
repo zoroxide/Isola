@@ -5,6 +5,8 @@
 #include <fstream>
 #include <sstream>
 
+namespace nut::detail {
+
 namespace {
 std::string lower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
@@ -156,3 +158,5 @@ void GpuProfile::writeReport(const std::string& path, const GpuInfo& gpu, int ch
     if (!passTimes.empty()) out << "GPU time per pass:\n" << passTimes << "\n";
     out << "Shader compiler messages:\n" << (shaderLog.empty() ? std::string("  (none)\n") : shaderLog) << "\n";
 }
+
+} // namespace nut::detail

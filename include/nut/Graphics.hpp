@@ -1,8 +1,14 @@
 #pragma once
 
-// Rendering quality and post-processing settings (edited live in the GUI).
-// A quality tier (0 potato .. 3 high) bundles everything below, including how complex the
-// shaders are; the engine picks the tier for the GPU it runs on (see GpuProfile).
+namespace nut {
+
+/// Quality tiers, from very old / low-end GPUs to modern ones.
+enum class QualityTier : int { Potato = 0, Low = 1, Medium = 2, High = 3 };
+
+/// Rendering quality and post-processing settings (edited live through Engine::graphics() or
+/// the settings panel). A quality tier (0 potato .. 3 high) bundles everything below, including how complex the
+/// shaders are. By default the engine benchmarks the GPU once and picks the tier itself;
+/// GraphicsSettings::forTier() gives the defaults of a tier.
 struct GraphicsSettings {
     // Quality tier and automatic adaptation
     int   tier = 2;                // 0 potato, 1 low, 2 medium, 3 high
@@ -91,6 +97,7 @@ struct GraphicsSettings {
         }
         return g;
     }
-    // Backwards compatible name
-    static GraphicsSettings preset(int level) { return forTier(level + 1); }
+    static GraphicsSettings forTier(QualityTier t) { return forTier(static_cast<int>(t)); }
 };
+
+} // namespace nut

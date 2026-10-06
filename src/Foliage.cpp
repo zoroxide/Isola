@@ -1,6 +1,6 @@
 #include "Foliage.h"
 #include "Terrain.h"
-#include "libs/stb_image.h"
+#include <stb_image.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/constants.hpp>
@@ -8,6 +8,8 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+
+namespace nut::detail {
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -735,3 +737,5 @@ void Foliage::drawGrass(const Terrain& terrain, const FoliageParams& params, con
     glBindVertexArray(0);
     (void)time;
 }
+
+} // namespace nut::detail

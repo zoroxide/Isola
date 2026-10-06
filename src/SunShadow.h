@@ -2,6 +2,8 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 
+namespace nut::detail {
+
 class Terrain;
 
 // Island-wide sun shadows. A GPU pass marches from every texel towards the sun over the terrain
@@ -26,3 +28,5 @@ private:
     bool built_ = false;
     glm::vec3 lastSun_{0.0f};
 };
+
+} // namespace nut::detail

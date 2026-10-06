@@ -3,7 +3,9 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
-#include "Graphics.h"
+#include <nut/Graphics.hpp>
+
+namespace nut::detail {
 
 // GPU timings of named passes (ring-buffered queries, so reading them never stalls the GPU)
 class GpuTimers {
@@ -64,3 +66,5 @@ private:
     GLuint raysFbo_ = 0, raysTex_ = 0;
     GLuint vao_ = 0;
 };
+
+} // namespace nut::detail

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+namespace nut::detail {
+
 class Terrain;
 
 // A light placed by the village: lamps, lanterns, fireplaces
@@ -65,9 +67,6 @@ public:
     void setMaxHouseLights(int n) { maxHouseLights_ = n; }
     GLuint albedoTexture() const { return albedo_; }
     GLuint normalTexture() const { return normal_; }
-    // For tests: a point standing in an open doorway, and one inside a wall
-    glm::vec3 testDoorway() const { return testDoor_; }
-    glm::vec3 testWall() const { return testWall_; }
 
 private:
     struct House {
@@ -116,7 +115,6 @@ private:
     int gridW_ = 0, gridH_ = 0;
     std::vector<std::vector<int>> colGrid_, walkGrid_;
     void buildGrids();
-    glm::vec3 testDoor_{0}, testWall_{0};
 
     // GPU
     GLuint albedo_ = 0, normal_ = 0;
@@ -136,3 +134,5 @@ private:
     int maxHouseLights_ = 4;
     mutable int drawnHouses_ = 0;
 };
+
+} // namespace nut::detail

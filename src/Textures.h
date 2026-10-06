@@ -2,6 +2,8 @@
 #include <GL/glew.h>
 #include <string>
 
+namespace nut::detail {
+
 // Procedurally generated helper textures (created once at startup)
 namespace Textures {
 // Tileable RGBA noise: r,g,b,a hold fractal noise at increasing frequencies. Mipmapped, repeating.
@@ -16,3 +18,5 @@ void setAnisotropy(GLuint tex, GLenum target, float amount);
 GLuint loadMaterialArray(const std::string& dir, const char* const* names, int count, const char* suffix,
                          bool normals, float anisotropy);
 }
+
+} // namespace nut::detail

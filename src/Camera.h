@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+namespace nut::detail {
+
 class Camera {
 public:
     Camera();
@@ -27,3 +29,5 @@ private:
     float yaw_;
     float pitch_;
 };
+
+} // namespace nut::detail

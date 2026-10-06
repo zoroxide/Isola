@@ -1,8 +1,10 @@
-#include "Engine.h"
+#include "EngineCore.h"
 #include "Textures.h"
 #include <sstream>
 #include "PostProcess.h"
-#include "gui/gui.h"
+#include "gui/Gui.h"
+
+#include <imgui.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 
@@ -14,90 +16,76 @@
 
 // STLs
 #include <algorithm>
+#include <exception>
+#include <utility>
 #include <cmath>
 #include <iostream>
 #include <vector>
 
-// Vertex struct
-struct Vertex {
-  glm::vec3 pos;
-  glm::vec3 normal;
-  glm::vec2 uv;
-};
+namespace nut::detail {
 
-// Static instance pointer
-Engine *Engine::s_instance_ = nullptr;
+EngineCore* EngineCore::s_instance_ = nullptr;
 
-Engine::Engine()
-    : window_(nullptr), shaderProgram_(0), skyShader_(0),
-      cameraPos_(0.0f, 6.0f, 12.0f), yaw_(-90.0f), pitch_(-15.0f),
-      mouseSensitivity_(0.12f), moveSpeed_(6.0f), lastX_(0.0), lastY_(0.0),
-      firstMouse_(true), lastFrame_(Clock::now()), deltaTime_(0.0f),
-      jumping_(false), jumpVel_(0.0f), vsyncEnabled_(true) {
-  std::fill(std::begin(keys_), std::end(keys_), false);
+EngineCore::EngineCore() : lastFrame_(Clock::now()) {
   s_instance_ = this;
-
-  // Defaults for configurable constants and paths
-  terrainSize_ = 1024;
-  terrainScale_ = 1.2f;
-  heightScale_ = 100.0f;
-  textureTile_ = 22.0f;
-  panoramaPath_.clear();
-  terrainTexturePath_.clear();
-  // Cloud defaults
-  cloudEnabled_ = true;
-  cloudSpeed_ = 0.02f;
-  cloudScale_ = 1.0f;
-  cloudOpacity_ = 0.55f;
-
-  // Create GUI manager (will be initialized after window/context creation)
   gui_ = new GUI(this);
 }
 
-Engine::~Engine() {
-  // Cleanup
+EngineCore::~EngineCore() {
+  delete gui_;   // shuts ImGui down while the GL context still exists
+  gui_ = nullptr;
   village_.clear();
   sponza_.clear();
-  if (shaderProgram_)
-    glDeleteProgram(shaderProgram_);
-  if (skyShader_)
-    glDeleteProgram(skyShader_);
-  // Skybox VAO/VBO are managed by Skybox class
-  if (window_)
+  if (window_) {
+    glfwDestroyWindow(window_);
     glfwTerminate();
-
-  if (gui_) {
-    delete gui_;
-    gui_ = nullptr;
   }
+  if (s_instance_ == this)
+    s_instance_ = nullptr;
 }
 
-bool Engine::init(bool fullscreen) {
-  // glfw init
-  if (!glfwInit())
-    return false;
+bool EngineCore::init(const EngineConfig &config, std::string &error) {
+  paths_ = config.paths;
+  quitOnEscape_ = config.quitOnEscape;
+  settingsPanel_ = config.settingsPanel;
+  hud_ = config.hud;
+  vsyncEnabled_ = config.window.vsync;
 
-  // glfw window hints
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  if (!fs::is_regular_file(paths_.shaders / "common.glsl", ec)) {
+    error = "Nut: shader directory not found: " + fs::absolute(paths_.shaders, ec).string() +
+            " (set EngineConfig::paths.shaders)";
+    return false;
+  }
+  if (!fs::is_directory(paths_.assets, ec)) {
+    error = "Nut: asset directory not found: " + fs::absolute(paths_.assets, ec).string() +
+            " (set EngineConfig::paths.assets)";
+    return false;
+  }
+
+  if (!glfwInit()) {
+    error = "Nut: could not initialise GLFW";
+    return false;
+  }
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#endif
 
-  // Create window
   GLFWmonitor *monitor = nullptr;
-  int SCR_W = 1280, SCR_H = 720;
-
-  // Fullscreen setup
-  if (fullscreen) {
+  int width = std::max(config.window.width, 64), height = std::max(config.window.height, 64);
+  if (config.window.fullscreen) {
     monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-    SCR_W = mode->width;
-    SCR_H = mode->height;
+    width = mode->width;
+    height = mode->height;
   }
-
-  // Create window
-  window_ = glfwCreateWindow(SCR_W, SCR_H, "Procedural Terrain (Engine)",
-                             monitor, nullptr);
+  window_ = glfwCreateWindow(width, height, config.window.title.c_str(), monitor, nullptr);
   if (!window_) {
+    error = "Nut: could not create a window with an OpenGL 3.3 core context";
     glfwTerminate();
     return false;
   }
@@ -114,23 +102,31 @@ bool Engine::init(bool fullscreen) {
     glewErr = GLEW_OK;
 #endif
   if (glewErr != GLEW_OK) {
-    std::cerr << "glewInit failed: " << glewGetErrorString(glewErr) << "\n";
+    error = std::string("Nut: glewInit failed: ") + reinterpret_cast<const char *>(glewGetErrorString(glewErr));
     return false;
   }
 
-  // Which GPU is this? Pick the quality tier before any shader is compiled: the one the
-  // benchmark chose last time for this GPU + driver, or a guess from the GPU family
-  // (then benchmarked on the first frame).
+  // Which GPU is this? Pick the quality tier before any shader is compiled: a fixed one from the
+  // config, the one the benchmark chose last time for this GPU + driver, or a guess from the GPU
+  // family (then benchmarked on the first frame).
   gpu_ = GpuProfile::detect();
   int tier = gpu_.suggestedTier;
-  tierFromCache_ = GpuProfile::loadCache("graphics.cfg", gpu_, tier);
-  needBenchmark_ = !tierFromCache_;
-  benchTier_ = tierFromCache_ ? tier : 3;
+  if (config.quality) {
+    tier = static_cast<int>(*config.quality);
+    tierFromCache_ = needBenchmark_ = false;
+    benchTier_ = tier;
+  } else {
+    tierFromCache_ = GpuProfile::loadCache(dataPath("graphics.cfg").string(), gpu_, tier);
+    needBenchmark_ = !tierFromCache_;
+    benchTier_ = tierFromCache_ ? tier : 3;
+  }
   std::cout << "GPU: " << gpu_.renderer << " (" << gpu_.vendorName() << ", "
             << (gpu_.vramMB > 0 ? std::to_string(gpu_.vramMB) + " MB" : std::string("VRAM unknown")) << ", OpenGL "
             << gpu_.version << ")\nQuality tier: " << GraphicsSettings::tierName(tier)
-            << (tierFromCache_ ? " (saved benchmark result)" : " (initial guess; benchmarking on start)") << "\n";
+            << (config.quality ? " (fixed)" : tierFromCache_ ? " (saved benchmark result)" : " (initial guess; benchmarking on start)")
+            << "\n";
   graphics_ = GraphicsSettings::forTier(tier);
+  graphics_.autoTier = !config.quality;
   foliageParams_.grassEnabled = graphics_.grass;
   foliageParams_.grassDensity = graphics_.grassDensity;
   foliageParams_.grassRadius = graphics_.grassRadius;
@@ -140,77 +136,71 @@ bool Engine::init(bool fullscreen) {
 
   // Input
   glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-  glfwSetCursorPosCallback(window_, Engine::cursorPosCallbackStatic);
-  glfwSetKeyCallback(window_, Engine::keyCallbackStatic);
+  glfwSetCursorPosCallback(window_, EngineCore::cursorPosCallbackStatic);
+  glfwSetKeyCallback(window_, EngineCore::keyCallbackStatic);
 
   // GL settings
   glEnable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
 
-  // Resources Loading(shaders, terrain mesh, etc)
-  shaderProgram_ = shaders_.loadProgram("terrain", "Engine/shaders/vertex.glsl",
-                                        "Engine/shaders/fragment.glsl");
-  // Reuse terrain shader initially for simple model rendering.
-  // For robust rendering, a separate model shader can be added later.
-
-  // Create sky shader and setup Skybox helper
-  skyShader_ = shaders_.loadProgram("sky", "Engine/shaders/sky_vert.glsl",
-                                    "Engine/shaders/sky_frag.glsl");
+  // Shaders and textures
+  auto program = [&](const char *name, const char *vs, const char *fs) {
+    return shaders_.loadProgram(name, shaderPath(vs).c_str(), shaderPath(fs).c_str());
+  };
+  auto asset = [&](const char *rel) { return assetPath(rel).string(); };
+  shaderProgram_ = program("terrain", "vertex.glsl", "fragment.glsl");
+  skyShader_ = program("sky", "sky_vert.glsl", "sky_frag.glsl");
   sky_.setShader(skyShader_);
-  waterShader_ = shaders_.loadProgram("water", "Engine/shaders/water_vert.glsl",
-                                      "Engine/shaders/water_frag.glsl");
-  terrain_.loadMaterials("assets/textures/terrain");
-  grassShader_ = shaders_.loadProgram("grass", "Engine/shaders/grass_vert.glsl",
-                                      "Engine/shaders/grass_frag.glsl");
-  treeShader_ = shaders_.loadProgram("tree", "Engine/shaders/tree_vert.glsl",
-                                     "Engine/shaders/tree_frag.glsl");
-  treeBakeShader_ = shaders_.loadProgram("treeBake", "Engine/shaders/tree_vert.glsl",
-                                        "Engine/shaders/tree_bake_frag.glsl");
-  impostorShader_ = shaders_.loadProgram("impostor", "Engine/shaders/impostor_vert.glsl",
-                                        "Engine/shaders/impostor_frag.glsl");
-  sunShadowShader_ = shaders_.loadProgram("sunShadow", "Engine/shaders/fullscreen_vert.glsl",
-                                         "Engine/shaders/sun_shadow_frag.glsl");
+  waterShader_ = program("water", "water_vert.glsl", "water_frag.glsl");
+  terrain_.loadMaterials(asset("textures/terrain"));
+  grassShader_ = program("grass", "grass_vert.glsl", "grass_frag.glsl");
+  treeShader_ = program("tree", "tree_vert.glsl", "tree_frag.glsl");
+  treeBakeShader_ = program("treeBake", "tree_vert.glsl", "tree_bake_frag.glsl");
+  impostorShader_ = program("impostor", "impostor_vert.glsl", "impostor_frag.glsl");
+  sunShadowShader_ = program("sunShadow", "fullscreen_vert.glsl", "sun_shadow_frag.glsl");
   sunShadow_.init(sunShadowShader_, 1024);
   PostProcess::Programs pp;
-  pp.bright = shaders_.loadProgram("postBright", "Engine/shaders/fullscreen_vert.glsl", "Engine/shaders/post_bright.glsl");
-  pp.blur = shaders_.loadProgram("postBlur", "Engine/shaders/fullscreen_vert.glsl", "Engine/shaders/post_blur.glsl");
-  pp.rays = shaders_.loadProgram("postRays", "Engine/shaders/fullscreen_vert.glsl", "Engine/shaders/post_rays.glsl");
-  pp.composite = shaders_.loadProgram("postComposite", "Engine/shaders/fullscreen_vert.glsl", "Engine/shaders/post_composite.glsl");
+  pp.bright = program("postBright", "fullscreen_vert.glsl", "post_bright.glsl");
+  pp.blur = program("postBlur", "fullscreen_vert.glsl", "post_blur.glsl");
+  pp.rays = program("postRays", "fullscreen_vert.glsl", "post_rays.glsl");
+  pp.composite = program("postComposite", "fullscreen_vert.glsl", "post_composite.glsl");
   post_.init(pp);
   FoliagePrograms fp;
   fp.grass = grassShader_;
   fp.tree = treeShader_;
   fp.treeBake = treeBakeShader_;
   fp.impostor = impostorShader_;
-  foliage_.init("assets/textures/foliage", fp);
+  foliage_.init(asset("textures/foliage"), fp);
   sky_.initFullscreenTriangle();
-
-  // Renderer programs and scene wiring
-  terrainShader_ = shaders_.loadProgram("terrainLod", "Engine/shaders/terrain_vert.glsl",
-                                       "Engine/shaders/terrain_frag.glsl");
-  villageShader_ = shaders_.loadProgram("village", "Engine/shaders/village_vert.glsl",
-                                      "Engine/shaders/village_frag.glsl");
-  villageShadowShader_ = shaders_.loadProgram("villageShadow", "Engine/shaders/village_shadow_vert.glsl",
-                                            "Engine/shaders/village_shadow_frag.glsl");
-  village_.init("assets/textures/village");
-  sponzaShader_ = shaders_.loadProgram("sponza", "Engine/shaders/sponza_vert.glsl",
-                                       "Engine/shaders/sponza_frag.glsl");
-  sponzaShadowShader_ = shaders_.loadProgram("sponzaShadow", "Engine/shaders/sponza_shadow_vert.glsl",
-                                             "Engine/shaders/sponza_shadow_frag.glsl");
+  terrainShader_ = program("terrainLod", "terrain_vert.glsl", "terrain_frag.glsl");
+  villageShader_ = program("village", "village_vert.glsl", "village_frag.glsl");
+  villageShadowShader_ = program("villageShadow", "village_shadow_vert.glsl", "village_shadow_frag.glsl");
+  village_.init(asset("textures/village"));
+  sponzaShader_ = program("sponza", "sponza_vert.glsl", "sponza_frag.glsl");
+  sponzaShadowShader_ = program("sponzaShadow", "sponza_shadow_vert.glsl", "sponza_shadow_frag.glsl");
+  if (!shaderProgram_ || !skyShader_ || !terrainShader_ || !waterShader_ || !villageShader_ || !pp.composite) {
+    error = "Nut: shader compilation failed:\n" + shaders_.log();
+    return false;
+  }
   noiseTex_ = Textures::createNoise(256);
   waterDetailTex_ = Textures::createWaterDetail(256);
   renderer_.setPrograms(terrainShader_, shaderProgram_, skyShader_);
-  // Models are drawn by the engine loop (before the transparent ocean), not the renderer
-  renderer_.setScene(&terrain_, &sky_, nullptr);
+  renderer_.setScene(&terrain_, &sky_);
 
-  // Generate initial procedural terrain via Terrain subsystem
-  terrain_.generateProcedural(terrainSize_, terrainScale_, heightScale_,
-                              textureTile_, terrainParams_);
+  // The island is always built (Sponza needs it too when the player switches back);
+  // an island start map is generated straight away from its preset
+  int startMap = static_cast<int>(config.startMap);
+  if (isIsland(config.startMap)) {
+    terrainParams_ = islandPreset(startMap);
+    map_ = startMap;
+  }
+  if (config.seed)
+    terrainParams_.seed = *config.seed;
+  terrain_.generateProcedural(terrainSize_, terrainScale_, heightScale_, textureTile_, terrainParams_);
   village_.generate(terrain_, terrainParams_.seed);
   replantTrees();
   placePlayerOnLand();
 
-  // Initialize GUI after the OpenGL context is created
   if (gui_)
     gui_->init(window_);
 
@@ -218,15 +208,23 @@ bool Engine::init(bool fullscreen) {
   village_.setMaxHouseLights(graphics_.maxHouseLights);
   applyTextureQuality();
   setupSamplerUnits();
-  writeGpuReport();
 
+  if (!config.sky.empty() && !panorama(config.sky.string())) {
+    error = "Nut: could not load the sky " + config.sky.string();
+    return false;
+  }
+  if (!isIsland(config.startMap) && !selectMap(startMap)) {
+    error = std::string("Nut: could not load the map ") + mapName(startMap);
+    return false;
+  }
+  writeGpuReport();
   return true;
 }
 
 // ---------------------------------------------------------------------------
 // GPU-aware quality
 // ---------------------------------------------------------------------------
-void Engine::refreshPrograms() {
+void EngineCore::refreshPrograms() {
   shaderProgram_ = shaders_.get("terrain");
   skyShader_ = shaders_.get("sky");
   waterShader_ = shaders_.get("water");
@@ -252,7 +250,7 @@ void Engine::refreshPrograms() {
   post_.setPrograms(pp);
 }
 
-void Engine::applyTextureQuality() {
+void EngineCore::applyTextureQuality() {
   // Anisotropic filtering is cheap on modern GPUs and very expensive on old / low-bandwidth ones
   float a = graphics_.anisotropy;
   Textures::setAnisotropy(terrain_.materialAlbedo(), GL_TEXTURE_2D_ARRAY, a);
@@ -264,7 +262,7 @@ void Engine::applyTextureQuality() {
     sponza_.setAnisotropy(a);
 }
 
-void Engine::applyTier(int tier, const char *reason) {
+void EngineCore::applyTier(int tier, const char *reason) {
   tier = glm::clamp(tier, 0, 3);
   int oldQuality = graphics_.shaderQuality();
   GraphicsSettings g = GraphicsSettings::forTier(tier);
@@ -296,7 +294,7 @@ void Engine::applyTier(int tier, const char *reason) {
   }
 }
 
-void Engine::updateQualityGovernor(float dt) {
+void EngineCore::updateQualityGovernor(float dt) {
   // Dynamic resolution handles small swings. When even the lowest resolution can't hold the
   // target for a few seconds, drop a tier (simpler shaders, fewer effects); when the GPU idles at
   // full resolution for a long time, go back up (never above what the benchmark allowed).
@@ -314,7 +312,7 @@ void Engine::updateQualityGovernor(float dt) {
     applyTier(graphics_.tier + 1, "the GPU has plenty of headroom");
 }
 
-void Engine::runGpuBenchmark() {
+void EngineCore::runGpuBenchmark() {
   // Render a demanding view (the village street, or the spawn point) at two resolutions per tier,
   // timing whole frames. Frame time ~ fixed + perPixel * scale^2, so two samples predict the
   // resolution each tier can reach at the target frame rate. Pick the best tier that still runs
@@ -388,111 +386,26 @@ void Engine::runGpuBenchmark() {
   graphics_.autoResolution = true;
   benchTier_ = chosen;
   tierFromCache_ = false;
-  GpuProfile::saveCache("graphics.cfg", gpu_, chosen);
+  GpuProfile::saveCache(dataPath("graphics.cfg").string(), gpu_, chosen);
   cameraPos_ = savePos; yaw_ = saveYaw; pitch_ = savePitch; swimming_ = saveSwim;
   writeGpuReport();
 }
 
-void Engine::writeGpuReport() {
+void EngineCore::writeGpuReport() {
   std::ostringstream passes;
   for (const auto &n : gpuTimers_.names()) passes << "  " << n << ": " << gpuTimers_.ms(n) << " ms\n";
   if (!gpuTimers_.names().empty())
     passes << "  render scale: " << int(post_.scale() * 100) << "%\n";
-  GpuProfile::writeReport("gpu_report.txt", gpu_, graphics_.tier, tierFromCache_, benchSamples_, passes.str(), shaders_.log());
+  GpuProfile::writeReport(dataPath("gpu_report.txt").string(), gpu_, graphics_.tier, tierFromCache_, benchSamples_, passes.str(), shaders_.log());
 }
 
-void Engine::vsync(bool enabled) {
+void EngineCore::vsync(bool enabled) {
   vsyncEnabled_ = enabled;
   if (window_)
     glfwSwapInterval(enabled ? 1 : 0);
 }
 
-bool Engine::getVsyncEnabled() const { return vsyncEnabled_; }
-
-/* (Getters / Setters) */
-
-// Terrain accessors
-int Engine::getTerrainSize() const { return terrainSize_; }
-void Engine::setTerrainSize(int v) { terrainSize_ = v; }
-float Engine::getTerrainScale() const { return terrainScale_; }
-void Engine::setTerrainScale(float v) { terrainScale_ = v; }
-float Engine::getHeightScale() const { return heightScale_; }
-void Engine::setHeightScale(float v) { heightScale_ = v; }
-float Engine::getTextureTile() const { return textureTile_; }
-void Engine::setTextureTile(float v) { textureTile_ = v; }
-
-// Path accessors
-const std::string &Engine::getPanoramaPath() const { return panoramaPath_; }
-void Engine::setPanoramaPath(const std::string &p) { panoramaPath_ = p; }
-const std::string &Engine::getTerrainTexturePath() const {
-  return terrainTexturePath_;
-}
-void Engine::setTerrainTexturePath(const std::string &p) {
-  terrainTexturePath_ = p;
-}
-
-// Cloud accessors
-bool Engine::getCloudEnabled() const { return cloudEnabled_; }
-void Engine::setCloudEnabled(bool v) { cloudEnabled_ = v; }
-float Engine::getCloudSpeed() const { return cloudSpeed_; }
-void Engine::setCloudSpeed(float v) { cloudSpeed_ = v; }
-float Engine::getCloudScale() const { return cloudScale_; }
-void Engine::setCloudScale(float v) { cloudScale_ = v; }
-float Engine::getCloudOpacity() const { return cloudOpacity_; }
-void Engine::setCloudOpacity(float v) { cloudOpacity_ = v; }
-
-void Engine::load_terrain_using_texture(const std::string &texturePath,
-                                        const std::string &objPath) {
-  // Load a procedural terrain texture via Terrain subsystem
-  if (!texturePath.empty()) {
-    terrain_.loadProceduralTexture(texturePath);
-  }
-
-  if (!objPath.empty()) {
-    models_.loadOBJ(objPath, glm::vec3(0.0f), glm::vec3(1.0f));
-  }
-}
-
-void Engine::add_house(const std::string &objPath, const glm::vec3 &position,
-                       const glm::vec3 &scale) {
-  // Delegate to Models manager
-  if (!models_.loadOBJ(objPath, position, scale)) {
-    std::cerr << "Error: Failed to load house OBJ via Models: " << objPath
-              << "\n";
-  }
-}
-
-bool Engine::load_flat_terrain(const std::string &texturePath) {
-  // Propagate current texture tiling to Terrain so flat UVs are repeated
-  terrain_.setTextureTile(textureTile_);
-  hasFlat_ = terrain_.buildFlat(texturePath);
-  if (!hasFlat_)
-    return false;
-  village_.clear();
-  foliage_.setClearing(glm::vec3(0));
-  foliage_.setPlantedTrees({});
-  terrain_.setFlatScale(glm::vec3(terrainSize_ * terrainScale_ * 0.5f, 1.0f,
-                                  terrainSize_ * terrainScale_ * 0.5f));
-
-  // Also place a house model in front of the player when switching to flat
-  // terrain. Use the current yaw to compute forward direction on XZ, and
-  // position the house a few meters ahead.
-  {
-    // Place a properly sized house in front of the player on the flat plane
-    glm::vec3 forward = glm::normalize(
-        glm::vec3(cos(glm::radians(yaw_)), 0.0f, sin(glm::radians(yaw_))));
-    glm::vec3 housePos =
-        cameraPos_ +
-        forward * 12.0f; // a bit farther ahead to avoid immediate collision
-    housePos.y = 0.01f;  // slight lift to avoid z-fighting with the plane
-    // Use a larger uniform scale so the user can enter the house comfortably
-    glm::vec3 houseScale = glm::vec3(6.0f);
-    // Load the house OBJ via Models subsystem (encapsulated loading/drawing)
-    models_.loadOBJ("assets/objs/house.obj", housePos, houseScale);
-  }
-  return true;
-}
-void Engine::setupSamplerUnits() {
+void EngineCore::setupSamplerUnits() {
   // Texture units (fixed for the whole run): 0 surface/model texture, 2 height map, 3 sky cube,
   // 4 terrain albedo array, 6 canopy shade, 7 leaf/bark cards, 8 noise, 9 water ripples,
   // 10 sun shadow height map, 11/12 tree billboard atlases
@@ -511,7 +424,7 @@ void Engine::setupSamplerUnits() {
   set(treeShader_, "foliageTex", 7);
 }
 
-void Engine::renderFrame(GLuint outputFbo, int outW, int outH) {
+void EngineCore::renderFrame(GLuint outputFbo, int outW, int outH) {
   // Camera
   camera_.setPosition(cameraPos_);
   camera_.setYawPitch(yaw_, pitch_);
@@ -591,7 +504,6 @@ void Engine::renderFrame(GLuint outputFbo, int outW, int outH) {
 
   gpuTimers_.begin("trees+grass");
   foliage_.draw(terrain_, foliageParams_, view, proj, cameraPos_, swimTime_);
-  models_.drawAll(shaderProgram_, view, proj);
   gpuTimers_.end();
   gpuTimers_.begin("village glass");
   village_.drawGlass(villageShader_, view, proj);
@@ -613,7 +525,7 @@ void Engine::renderFrame(GLuint outputFbo, int outW, int outH) {
 
 // The Sponza map: no terrain, water, grass or village; the building is lit by the sun (shadow map)
 // and its baked sky / bounce light, then the sky fills the courtyard opening.
-void Engine::renderSponza(const glm::mat4 &view, const glm::mat4 &proj, const glm::mat4 &invView,
+void EngineCore::renderSponza(const glm::mat4 &view, const glm::mat4 &proj, const glm::mat4 &invView,
                           const glm::mat4 &invProj, const glm::mat4 &VP, const glm::vec3 &lightDir,
                           const glm::vec3 &lightCol, const glm::vec3 &uwColor, GLuint outputFbo, int outW,
                           int outH) {
@@ -666,19 +578,24 @@ void Engine::renderSponza(const glm::mat4 &view, const glm::mat4 &proj, const gl
   post_.updateScale(graphics_, gpuTimers_.lastTotalMs());
 }
 
-void Engine::mainloop() {
+void EngineCore::run() {
   if (!window_)
     return;
+  quit_ = false;
   setupSamplerUnits();
   if (needBenchmark_)
     runGpuBenchmark();
   double reportAt = glfwGetTime() + 20.0;   // refresh gpu_report.txt with real per-pass timings
 
-  lastFrame_ = Clock::now();
-  while (!glfwWindowShouldClose(window_)) {
+  const auto start = Clock::now();
+  std::uint64_t frame = 0;
+  lastFrame_ = start;
+  while (!quit_ && !glfwWindowShouldClose(window_)) {
     auto now = Clock::now();
     deltaTime_ = std::chrono::duration<float>(now - lastFrame_).count();
     lastFrame_ = now;
+    if (deltaTime_ > 0.0f)
+      fps_ = fps_ > 0.0f ? fps_ + (1.0f / deltaTime_ - fps_) * 0.05f : 1.0f / deltaTime_;
     if (pendingMap_ >= 0) {
       int map = pendingMap_;
       pendingMap_ = -1;
@@ -688,12 +605,15 @@ void Engine::mainloop() {
       if (gui_) gui_->renderOverlayMessage(std::string("Loading ") + mapName(map) + "...", "");
       glfwSwapBuffers(window_);
       if (!selectMap(map))
-        std::cerr << "Could not load the map " << mapName(map) << "\n";
+        std::cerr << "Nut: could not load the map " << mapName(map) << "\n";
       lastFrame_ = Clock::now();   // don't count the loading time as a frame
       continue;
     }
     terrain_.setLiveParams(terrainParams_);
     updateMovement(deltaTime_);
+    if (updateHook)
+      updateHook(deltaTime_, std::chrono::duration<double>(now - start).count(), frame);
+    ++frame;
 
     // Render at the framebuffer size (differs from the window size on HiDPI screens)
     int fbW, fbH;
@@ -712,11 +632,13 @@ void Engine::mainloop() {
     glfwSwapBuffers(window_);
     glfwPollEvents();
   }
+  if (callbackError_)
+    std::rethrow_exception(std::exchange(callbackError_, nullptr));
 }
 
 // ---------------- Utility / helpers ----------------
 
-bool Engine::panorama(const std::string &path) {
+bool EngineCore::panorama(const std::string &path) {
   if (!sky_.loadFromPath(path))
     return false;
   panoramaPath_ = path;
@@ -727,17 +649,17 @@ bool Engine::panorama(const std::string &path) {
 }
 
 // Input callbacks
-void Engine::cursorPosCallbackStatic(GLFWwindow *, double xpos, double ypos) {
+void EngineCore::cursorPosCallbackStatic(GLFWwindow *, double xpos, double ypos) {
   if (s_instance_)
     s_instance_->cursorPosCallback(xpos, ypos);
 }
-void Engine::keyCallbackStatic(GLFWwindow *window, int key, int scancode,
+void EngineCore::keyCallbackStatic(GLFWwindow *window, int key, int scancode,
                                int action, int mods) {
   if (s_instance_)
     s_instance_->keyCallback(key, scancode, action, mods);
 }
 
-void Engine::cursorPosCallback(double xpos, double ypos) {
+void EngineCore::cursorPosCallback(double xpos, double ypos) {
   // Free cursor (settings panel open / ENTER): the mouse drives the GUI, not the camera
   if (glfwGetInputMode(window_, GLFW_CURSOR) != GLFW_CURSOR_DISABLED) {
     firstMouse_ = true;
@@ -759,13 +681,13 @@ void Engine::cursorPosCallback(double xpos, double ypos) {
   pitch_ = glm::clamp(pitch_, -89.0f, 89.0f);
 }
 
-void Engine::setGuiVisible(bool v) {
+void EngineCore::setGuiVisible(bool v) {
   guiVisible_ = v;
   glfwSetInputMode(window_, GLFW_CURSOR, v ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
   firstMouse_ = true; // no camera jump when the cursor is captured again
 }
 
-void Engine::keyCallback(int key, int, int action, int) {
+void EngineCore::keyCallback(int key, int, int action, int) {
   // While typing into a GUI text field, keys belong to ImGui (releases always pass
   // through so movement keys can't get stuck)
   bool typing = guiVisible_ && ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput;
@@ -776,17 +698,16 @@ void Engine::keyCallback(int key, int, int action, int) {
     keys_[key] = (action == GLFW_PRESS || action == GLFW_REPEAT); // key states
 
   // TAB shows / hides the settings panel (and frees the mouse to use it)
-  if (key == GLFW_KEY_TAB && action == GLFW_PRESS)
+  if (settingsPanel_ && key == GLFW_KEY_TAB && action == GLFW_PRESS)
     setGuiVisible(!guiVisible_);
 
-  // ESC closes the window
-  if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    glfwSetWindowShouldClose(window_, true);
+  if (quitOnEscape_ && key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+    quit_ = true;
 
   // SPACE for jumping
   if (key == GLFW_KEY_SPACE && action == GLFW_PRESS && !jumping_ && !swimming_) {
     jumping_ = true;
-    jumpVel_ = JUMP_VELOCITY; // ideal 7 for normal jump
+    jumpVel_ = kJumpVelocity; // ideal 7 for normal jump
   }
 
   // ENTER toggles mouse visibility
@@ -795,9 +716,19 @@ void Engine::keyCallback(int key, int, int action, int) {
     glfwSetInputMode(window_, GLFW_CURSOR, captured ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
     firstMouse_ = true;
   }
+
+  // Exceptions must not unwind through GLFW's C callback: keep it and rethrow from run()
+  if (keyHook && !callbackError_) {
+    try {
+      keyHook(key, action);
+    } catch (...) {
+      callbackError_ = std::current_exception();
+      quit_ = true;
+    }
+  }
 }
 
-void Engine::setPerFrameUniforms(GLuint prog, const glm::vec3 &lightDir,
+void EngineCore::setPerFrameUniforms(GLuint prog, const glm::vec3 &lightDir,
                                  const glm::vec3 &lightCol,
                                  const glm::vec3 &uwColor) {
   glUseProgram(prog);
@@ -842,7 +773,7 @@ void Engine::setPerFrameUniforms(GLuint prog, const glm::vec3 &lightDir,
   foliage_.bindCanopyShade(prog, 6, terrain_.getHalfExtent());
 }
 
-void Engine::updateMovement(float dt) {
+void EngineCore::updateMovement(float dt) {
   // Walking: WASD + SPACE to jump, SHIFT to sprint.
   // Swimming (deep water): the player floats at the surface and rides the waves.
   //   W swims where you look (look down to dive), SPACE swims up, CTRL / C dives,
@@ -879,7 +810,7 @@ void Engine::updateMovement(float dt) {
   if (!swimming_) {
     // Wading slows you down as the water gets deeper
     float wade = glm::clamp(depth / swimDepth, 0.0f, 1.0f);
-    float sp = moveSpeed_ * (keys_[GLFW_KEY_LEFT_SHIFT] ? SPRINT_MULTIPLIER : 1.0f) *
+    float sp = moveSpeed_ * (keys_[GLFW_KEY_LEFT_SHIFT] ? kSprintMultiplier : 1.0f) *
                (1.0f - 0.55f * wade);
     glm::vec3 walk = input(flatFront) * sp * dt;
     int steps = std::max(1, int(std::ceil(glm::length(walk) / 0.15f)));
@@ -970,7 +901,7 @@ void Engine::updateMovement(float dt) {
 }
 
 // Walking around the Sponza palace: floors from the building's geometry, walls and columns block.
-void Engine::updateSponzaMovement(float dt) {
+void EngineCore::updateSponzaMovement(float dt) {
   const float eyeHeight = 1.7f;
   swimming_ = underwater_ = false;
   oxygen_ = 1.0f;
@@ -983,7 +914,7 @@ void Engine::updateSponzaMovement(float dt) {
   if (keys_[GLFW_KEY_D]) m += right;
   if (glm::length(m) > 0.0f) m = glm::normalize(m);
   // A palace, not an island: a slower walk
-  glm::vec3 walk = m * moveSpeed_ * 0.6f * (keys_[GLFW_KEY_LEFT_SHIFT] ? SPRINT_MULTIPLIER : 1.0f) * dt;
+  glm::vec3 walk = m * moveSpeed_ * 0.6f * (keys_[GLFW_KEY_LEFT_SHIFT] ? kSprintMultiplier : 1.0f) * dt;
   int steps = std::max(1, int(std::ceil(glm::length(walk) / 0.1f)));
   for (int step = 0; step < steps; ++step) {
     glm::vec3 before = cameraPos_;
@@ -1017,23 +948,23 @@ void Engine::updateSponzaMovement(float dt) {
 }
 
 // ----------------- Maps -----------------
-int Engine::mapCount() {
+int EngineCore::mapCount() {
   int presets = 0;
-  TerrainParams::presetNames(presets);
+  islandPresetNames(presets);
   return presets + 1;
 }
 
-const char *Engine::mapName(int map) {
+const char *EngineCore::mapName(int map) {
   int presets = 0;
-  const char *const *names = TerrainParams::presetNames(presets);
+  const char *const *names = islandPresetNames(presets);
   if (map >= 0 && map < presets)
     return names[map];
   return map == presets ? "Sponza Palace" : "?";
 }
 
-bool Engine::inSponza() const { return map_ == mapCount() - 1; }
+bool EngineCore::inSponza() const { return map_ == mapCount() - 1; }
 
-bool Engine::selectMap(int map) {
+bool EngineCore::selectMap(int map) {
   if (map < 0 || map >= mapCount())
     return false;
   if (map == mapCount() - 1) {
@@ -1048,7 +979,7 @@ bool Engine::selectMap(int map) {
   }
   bool wasSponza = inSponza();
   int seed = terrainParams_.seed;
-  terrainParams_ = TerrainParams::preset(map);
+  terrainParams_ = islandPreset(map);
   terrainParams_.seed = seed;
   map_ = map;
   regenerateTerrain();
@@ -1057,7 +988,16 @@ bool Engine::selectMap(int map) {
   return true;
 }
 
-void Engine::teleportToSpawn() {
+void EngineCore::teleport(const glm::vec3 &eye, float yaw, float pitch) {
+  cameraPos_ = eye;
+  yaw_ = yaw;
+  pitch_ = glm::clamp(pitch, -89.0f, 89.0f);
+  swimming_ = underwater_ = jumping_ = false;
+  jumpVel_ = 0.0f;
+  snapExposure_ = true;
+}
+
+void EngineCore::teleportToSpawn() {
   if (inSponza()) {
     cameraPos_ = sponza_.spawn();
     yaw_ = sponza_.spawnYaw();
@@ -1072,11 +1012,11 @@ void Engine::teleportToSpawn() {
 }
 
 // ----------------- Runtime config API -----------------
-float Engine::groundHeight(float x, float z, float feetY) const {
+float EngineCore::groundHeight(float x, float z, float feetY) const {
   return std::max(terrain_.getHeightAt(x, z), village_.groundAt(x, z, feetY));
 }
 
-void Engine::gatherLights(const glm::vec3 &sunColor) {
+void EngineCore::gatherLights(const glm::vec3 &sunColor) {
   // Pick the 16 lights nearest to the camera. Outdoor lamps are dimmed in bright daylight
   // (they still glow), interior lamps and fires always matter because interiors are shaded.
   numPointLights_ = numOutdoorLights_ = 0;
@@ -1110,12 +1050,12 @@ void Engine::gatherLights(const glm::vec3 &sunColor) {
   }
 }
 
-void Engine::regenerateVillage() {
+void EngineCore::regenerateVillage() {
   // A new village needs fresh terrain (the old terraces are carved into it)
   regenerateTerrain();
 }
 
-void Engine::teleportToVillage() {
+void EngineCore::teleportToVillage() {
   if (!village_.active()) return;
   cameraPos_ = village_.spawn();
   yaw_ = village_.spawnYaw();
@@ -1124,7 +1064,7 @@ void Engine::teleportToVillage() {
   jumpVel_ = 0.0f;
 }
 
-void Engine::regenerateTerrain() {
+void EngineCore::regenerateTerrain() {
   terrain_.generateProcedural(terrainSize_, terrainScale_, heightScale_,
                               textureTile_, terrainParams_);
   village_.generate(terrain_, terrainParams_.seed);
@@ -1132,7 +1072,7 @@ void Engine::regenerateTerrain() {
   placePlayerOnLand();
 }
 
-void Engine::replantTrees() {
+void EngineCore::replantTrees() {
   foliage_.setClearing(village_.clearing());
   foliage_.setPlantedTrees(village_.plantedTrees());
   foliage_.generate(terrain_, foliageParams_, terrainParams_.seed);
@@ -1140,7 +1080,7 @@ void Engine::replantTrees() {
   sunShadow_.invalidate(); // trees and terrain changed: shadows are rebuilt next frame
 }
 
-void Engine::placePlayerOnLand() {
+void EngineCore::placePlayerOnLand() {
   if (village_.active()) {
     cameraPos_ = village_.spawn(); yaw_ = village_.spawnYaw(); pitch_ = -4.0f;
     swimming_ = underwater_ = jumping_ = false;
@@ -1178,4 +1118,4 @@ void Engine::placePlayerOnLand() {
   foliage_.resolveCollision(cameraPos_); // don't start inside a tree trunk
 }
 
-
+} // namespace nut::detail

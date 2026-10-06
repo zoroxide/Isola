@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iostream>
 
+namespace nut::detail {
+
 static std::string loadFile(const char* path) {
     std::ifstream in(path);
     if(!in) { std::cerr << "Failed to open " << path << std::endl; return {}; }
@@ -98,3 +100,5 @@ GLuint ShaderManager::get(const std::string& name) const {
     auto it = programs_.find(name);
     return (it != programs_.end()) ? it->second.id : 0;
 }
+
+} // namespace nut::detail

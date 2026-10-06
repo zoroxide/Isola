@@ -4,7 +4,9 @@
 
 struct GLFWwindow;
 
-class Engine;
+namespace nut::detail {
+
+class EngineCore;
 
 // Minimal ImGui wrapper for the project. The implementation assumes
 // ImGui + backends (imgui_impl_glfw.h/imgui_impl_opengl3.h) are available
@@ -12,7 +14,7 @@ class Engine;
 // the GLFW window and drawing a simple control panel.
 class GUI {
 public:
-    GUI(Engine* engine);
+    explicit GUI(EngineCore* engine);
     ~GUI();
 
     // Initialize ImGui using the provided GLFWwindow. Call after the
@@ -34,7 +36,9 @@ private:
     void drawGraphicsPanel();
     void drawVillagePanel();
     void drawMapPanel();
-    Engine* engine_;
+    EngineCore* engine_;
     GLFWwindow* window_;
     bool initialized_;
 };
+
+} // namespace nut::detail

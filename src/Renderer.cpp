@@ -1,7 +1,8 @@
 #include "Renderer.h"
 #include "Terrain.h"
 #include "Skybox.h"
-#include "Models.h"
+
+namespace nut::detail {
 
 void Renderer::drawFrame(const glm::mat4& view, const glm::mat4& proj, const glm::mat4& model,
                          const glm::mat4& invView, const glm::mat4& invProj,
@@ -12,5 +13,6 @@ void Renderer::drawFrame(const glm::mat4& view, const glm::mat4& proj, const glm
     if (terrain_) terrain_->draw(terrain_->isFlat() ? plainProg_ : terrainProg_, model, view, proj, cameraPos);
     if (sky_) sky_->setShader(skyProg_);
     if (sky_) sky_->draw(invView, invProj, hasSkybox, time, cloudEnabled, cloudSpeed, cloudScale, cloudOpacity);
-    if (models_) models_->drawAll(terrainProg_, view, proj);
 }
+
+} // namespace nut::detail

@@ -1,95 +1,151 @@
-#include "Engine/Engine.h"
-#include <iostream>
-#include <fstream>
-#include <cstring>
-#include <cctype>
-#include <string>
+// Nut demo: walk around the procedural islands and the Sponza palace.
+//
+//   nut-demo [--windowed] [--map <name>] [--resources <dir>]
+//
+// In the game: WASD move, mouse look, Space jump, Shift sprint, Tab settings panel, Esc quit.
+// Demo keys:   1-8 switch map, N new island, T sun time-lapse, F3 print frame stats.
 
-// Map by (part of) its name, case-insensitive: "sponza", "archipelago", "big island"...
-static int findMap(const std::string& wanted) {
-    auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-    for (int i = 0; i < Engine::mapCount(); ++i)
-        if (lower(Engine::mapName(i)).find(lower(wanted)) != std::string::npos) return i;
-    return -1;
+#include <nut/Nut.hpp>
+
+#include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+
+namespace {
+
+struct Options {
+    bool windowed = false;
+    nut::Map map = nut::Map::BigIsland;
+    std::filesystem::path resources = ".";   // folder holding shaders/ and assets/
+};
+
+void printUsage() {
+    std::cout << "Usage: nut-demo [--windowed] [--map <name>] [--resources <dir>]\n\nMaps:\n";
+    for (nut::Map map : nut::kAllMaps)
+        std::cout << "  " << nut::toString(map) << '\n';
 }
 
-int main(int argc, char** argv) {
-    // --windowed, --smoke-test, --map <name>
-    bool smoke = false, windowed = false;
-    std::string map;
+Options parseArguments(int argc, char** argv) {
+    Options options;
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--smoke-test") == 0) smoke = true;
-        else if (std::strcmp(argv[i], "--windowed") == 0) windowed = true;
-        else if (std::strcmp(argv[i], "--map") == 0 && i + 1 < argc) map = argv[++i];
-    }
-    windowed |= smoke;
-    Engine engine;
-
-    // Initialize the engine (fullscreen by default). If you want windowed, pass false.
-    if (!engine.init(!windowed)) {
-        std::cerr << "Failed to initialize engine\n";
-        return -1;
-    }
-
-    // Ground materials (grass/rock/sand/snow) load automatically from assets/textures/terrain.
-    // To force your own grass texture instead:
-    // engine.load_terrain_using_texture("assets/textures/grass.png");
-
-    // Load panorama (optional). HDR panoramas also drive the sun direction, colour and fog.
-    if (!engine.panorama("assets/panoramas/kloofendal_48d_partly_cloudy_puresky_4k.hdr") &&
-        !engine.panorama("assets/skybox/sky_17_2k.png")) {
-        std::cerr << "Failed to load panorama texture\n";
-    }
-
-    // Toggle vsync if desired
-    engine.vsync(true);
-
-    if (!map.empty()) {
-        int index = findMap(map);
-        if (index < 0 || !engine.selectMap(index)) {
-            std::cerr << "Unknown or unloadable map: " << map << "\n";
-            return 5;
-        }
-    }
-
-    // A reproducible render/collision check, without entering the interactive loop.
-    if (smoke) {
-        std::string shotPath = "build/village-smoke.ppm";
-        if (engine.inSponza()) {
-            // The spawn stands on a floor, and the palace's outer wall blocks the player
-            const Sponza& sp = engine.sponza();
-            glm::vec3 spawn = sp.spawn();
-            if (sp.groundAt(spawn.x, spawn.z, spawn.y - 1.7f) < -1e8f) return 3;
-            glm::vec3 outside = spawn, start = spawn;
-            for (int i = 0; i < 400; ++i) { outside.z += 0.05f; sp.collide(outside, 1.7f); }
-            if (outside.z > sp.boundsMax().z - 0.2f) return 3;
-            std::cout << "Sponza smoke: floor at spawn, walked " << (outside.z - start.z) << " m before a wall\n";
-            shotPath = "build/sponza-smoke.ppm";
+        const std::string_view arg = argv[i];
+        auto value = [&]() -> std::string_view {
+            if (i + 1 >= argc)
+                throw std::invalid_argument(std::string(arg) + " needs a value");
+            return argv[++i];
+        };
+        if (arg == "--windowed") {
+            options.windowed = true;
+        } else if (arg == "--map") {
+            const std::string_view name = value();
+            const auto map = nut::mapFromName(name);
+            if (!map)
+                throw std::invalid_argument("unknown map: " + std::string(name));
+            options.map = *map;
+        } else if (arg == "--resources") {
+            options.resources = value();
+        } else if (arg == "--help" || arg == "-h") {
+            printUsage();
+            std::exit(EXIT_SUCCESS);
         } else {
-            if (!engine.village().active()) return 2;
-            glm::vec3 door = engine.village().testDoorway();
-            glm::vec3 wall = engine.village().testWall();
-            glm::vec3 originalDoor = door, originalWall = wall;
-            engine.village().collide(door);
-            engine.village().collide(wall);
-            if (glm::length(door-originalDoor)>0.01f || glm::length(wall-originalWall)<0.1f) return 3;
-            std::cout<<"Village smoke: doorway open, wall collision active\n";
+            throw std::invalid_argument("unknown option: " + std::string(arg));
         }
-        while (glGetError()!=GL_NO_ERROR) {}
-        for (int i=0;i<3;++i) engine.renderFrame(0,1280,720);
-        glFinish();
-        GLenum error=glGetError();
-        std::vector<unsigned char> pixels(1280*720*3);
-        glReadPixels(0,0,1280,720,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());
-        std::ofstream shot(shotPath,std::ios::binary);
-        shot<<"P6\n1280 720\n255\n";
-        for(int y=719;y>=0;--y) shot.write(reinterpret_cast<char*>(pixels.data()+y*1280*3),1280*3);
-        std::cout<<"Smoke render: "<<shotPath<<", GL error="<<error<<"\n";
-        return error==GL_NO_ERROR?0:4;
+    }
+    return options;
+}
+
+// Moves the sun through a day while the time-lapse is on
+class SunCycle {
+public:
+    void toggle(nut::Engine& engine) {
+        enabled_ = !enabled_;
+        if (!enabled_)
+            engine.useSunFromSky();
     }
 
-    // Enter the engine main loop
-    engine.mainloop();
+    void update(nut::Engine& engine, float dt) {
+        if (!enabled_)
+            return;
+        constexpr float kDegreesPerSecond = 6.0f;   // a whole day in a minute
+        hourAngle_ = std::fmod(hourAngle_ + kDegreesPerSecond * dt, 360.0f);
+        nut::SunSettings sun;
+        sun.elevation = 65.0f * std::sin(hourAngle_ * 3.14159265f / 180.0f);
+        sun.azimuth = 90.0f + hourAngle_;
+        sun.intensity = sun.elevation > 0.0f ? 1.0f : 0.15f;   // a dim, moonlit night
+        engine.setSun(sun);
+    }
 
-    return 0;
+private:
+    bool enabled_ = false;
+    float hourAngle_ = 30.0f;
+};
+
+void printStats(const nut::Engine& engine) {
+    const nut::FrameStats stats = engine.stats();
+    const nut::PlayerState player = engine.player();
+    std::cout << nut::toString(engine.currentMap()) << ": " << stats.fps << " fps, GPU " << stats.gpuMs
+              << " ms, render scale " << static_cast<int>(stats.renderScale * 100.0f) << "%, player at ("
+              << player.position.x << ", " << player.position.y << ", " << player.position.z << ")\n";
+}
+
+} // namespace
+
+int main(int argc, char** argv) try {
+    const Options options = parseArguments(argc, argv);
+
+    nut::EngineConfig config;
+    config.window.title = "Nut Demo";
+    config.window.fullscreen = !options.windowed;
+    config.paths.shaders = options.resources / "shaders";
+    config.paths.assets = options.resources / "assets";
+    config.startMap = options.map;
+    config.sky = config.paths.assets / "panoramas" / "kloofendal_48d_partly_cloudy_puresky_4k.hdr";
+
+    nut::Engine engine{config};
+    std::cout << "Nut " << NUT_VERSION_STRING << " - " << nut::toString(engine.currentMap())
+              << ". Keys: 1-8 maps, N new island, T sun time-lapse, F3 stats, Tab settings, Esc quit\n";
+
+    SunCycle sunCycle;
+
+    engine.onKey([&](nut::Engine& e, nut::Key key, nut::KeyAction action) {
+        if (action != nut::KeyAction::Press)
+            return;
+        const int digit = static_cast<int>(key) - static_cast<int>(nut::Key::Num1);
+        if (digit >= 0 && digit < static_cast<int>(nut::kAllMaps.size())) {
+            e.loadMap(nut::kAllMaps[static_cast<std::size_t>(digit)]);
+            return;
+        }
+        switch (key) {
+        case nut::Key::N:   // the same island type, a new random layout
+            if (nut::isIsland(e.currentMap())) {
+                e.terrain().seed += 1;
+                e.regenerateWorld();
+            }
+            break;
+        case nut::Key::T:
+            sunCycle.toggle(e);
+            break;
+        case nut::Key::F3:
+            printStats(e);
+            break;
+        default:
+            break;
+        }
+    });
+
+    engine.onUpdate([&](nut::Engine& e, const nut::FrameInfo& frame) { sunCycle.update(e, frame.deltaTime); });
+
+    engine.run();
+    return EXIT_SUCCESS;
+} catch (const nut::Error& error) {
+    std::cerr << error.what() << '\n';
+    return EXIT_FAILURE;
+} catch (const std::exception& error) {
+    std::cerr << "nut-demo: " << error.what() << '\n';
+    printUsage();
+    return EXIT_FAILURE;
 }

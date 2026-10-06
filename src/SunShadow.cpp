@@ -2,6 +2,8 @@
 #include "Terrain.h"
 #include <cmath>
 
+namespace nut::detail {
+
 SunShadow::~SunShadow() {
     if (tex_) glDeleteTextures(1, &tex_);
     if (fbo_) glDeleteFramebuffers(1, &fbo_);
@@ -74,3 +76,5 @@ void SunShadow::bind(GLuint prog, int unit, float halfExtent, float strength, bo
     glBindTexture(GL_TEXTURE_2D, tex_);
     glActiveTexture(GL_TEXTURE0);
 }
+
+} // namespace nut::detail

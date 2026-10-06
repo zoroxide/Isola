@@ -9,7 +9,9 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include "libs/stb_image.h"
+#include <stb_image.h>
+
+namespace nut::detail {
 
 Skybox::~Skybox() {
     if (skyVBO_) glDeleteBuffers(1, &skyVBO_);
@@ -333,3 +335,5 @@ bool Skybox::loadFromPath(const std::string& path) {
               << ", exposure " << exposure << (analysis.hasSun ? ", sun detected" : "") << ")\n";
     return true;
 }
+
+} // namespace nut::detail

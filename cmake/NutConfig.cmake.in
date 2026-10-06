@@ -1,0 +1,17 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(OpenGL)
+find_dependency(glfw3 3.3)
+find_dependency(GLEW)
+find_dependency(assimp)
+find_dependency(Threads)
+find_package(glm CONFIG QUIET)
+if(NOT TARGET glm::glm)
+    find_path(GLM_INCLUDE_DIR glm/glm.hpp REQUIRED)
+    add_library(glm::glm INTERFACE IMPORTED)
+    set_target_properties(glm::glm PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${GLM_INCLUDE_DIR}")
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/NutTargets.cmake")
+check_required_components(Nut)

@@ -1,5 +1,5 @@
 #include "Sponza.h"
-#include "libs/stb_image.h"
+#include <stb_image.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+
+namespace nut::detail {
 
 namespace {
 enum TexKind { ALBEDO = 0, NORMAL = 1, METAL_ROUGH = 2 };
@@ -876,3 +878,5 @@ float Sponza::headroom(const glm::vec3& eye) const {
     if (loaded() && bvh_.intersect(eye, glm::vec3(0, 1, 0), 5.0f, hit, kAlphaTested)) return hit.t;
     return 1e9f;
 }
+
+} // namespace nut::detail

@@ -9,6 +9,8 @@
 #include <iostream>
 #include <random>
 
+namespace nut::detail {
+
 // ===========================================================================
 // Geometry toolkit
 // ===========================================================================
@@ -1183,14 +1185,6 @@ void Village::buildAll(const Terrain& t) {
         b.house(h);
         b.currentHouse = -1;
         range(first, glm::vec3(h.c.x, h.padY + 4.0f, h.c.y), std::sqrt(h.w * h.w + h.d * h.d) * 0.5f + 5.0f, (int)(&h - &houses_[0]));
-        // the door: a doorway test point and a wall test point (for the smoke test)
-        if (&h == &houses_.front()) {
-            glm::vec2 door = h.c + h.ex * h.doorX + h.ez * (-h.d * 0.5f + WT * 0.5f);
-            testDoor_ = glm::vec3(door.x, h.padY + F0 + 1.7f, door.y);
-            // between the door frame and the nearest window
-            glm::vec2 wall = h.c + h.ex * (h.doorX + (h.doorX > 0 ? -0.85f : 0.85f)) + h.ez * (-h.d * 0.5f + WT * 0.5f);
-            testWall_ = glm::vec3(wall.x, h.padY + F0 + 1.7f, wall.y);
-        }
     }
     // Plaza
     b.xf = VillageBuilder::Xf();
@@ -1600,3 +1594,5 @@ void Village::setShadowResolution(int res) {
     shadowFbo_ = shadowTex_ = 0;
     shadowBuilt_ = false;   // rebuilt at the new size next frame
 }
+
+} // namespace nut::detail

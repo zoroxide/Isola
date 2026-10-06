@@ -9,8 +9,10 @@
 #include <thread>
 #include <cstdint>
 #include <iostream>
-#include "libs/stb_image.h"
+#include <stb_image.h>
 #include "Textures.h"
+
+namespace nut::detail {
 
 Terrain::~Terrain() {
     if (vbo_) glDeleteBuffers(1, &vbo_);
@@ -524,12 +526,12 @@ void Terrain::editHeights(glm::vec2 wmin, glm::vec2 wmax, const std::function<fl
 // --- Presets ---
 static const char* kPresetNames[] = { "Big Island", "Archipelago", "Mountains", "Rolling Hills", "Plains", "Mesa / Canyons", "Alpine Peaks" };
 
-const char* const* TerrainParams::presetNames(int& count) {
+const char* const* islandPresetNames(int& count) {
     count = (int)(sizeof(kPresetNames) / sizeof(kPresetNames[0]));
     return kPresetNames;
 }
 
-TerrainParams TerrainParams::preset(int id) {
+TerrainParams islandPreset(int id) {
     TerrainParams p; // defaults are the "Big Island" look
     auto mainland = [&]() { p.islandStrength = 0.0f; p.waterLevel = 0.28f; p.frequency = 0.0045f; };
     switch (id) {
@@ -830,3 +832,5 @@ float Terrain::getHeightAt(float wx, float wz) const {
                     lerpf(heights_[(zi + 1) * N + xi], heights_[(zi + 1) * N + xi + 1], fx), fz);
     return h;
 }
+
+} // namespace nut::detail

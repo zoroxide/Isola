@@ -1,9 +1,9 @@
-#include "gui.h"
-#include "../Engine.h"
+#include "Gui.h"
+#include "../EngineCore.h"
 
-#include "../libs/imgui/imgui.h"
-#include "../libs/imgui/backends/imgui_impl_glfw.h"
-#include "../libs/imgui/backends/imgui_impl_opengl3.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -12,7 +12,9 @@
 #include <filesystem>
 #include <vector>
 
-GUI::GUI(Engine* engine) : engine_(engine), window_(nullptr), initialized_(false) {}
+namespace nut::detail {
+
+GUI::GUI(EngineCore* engine) : engine_(engine), window_(nullptr), initialized_(false) {}
 
 GUI::~GUI() {
     if (initialized_) {
@@ -47,12 +49,12 @@ bool GUI::init(GLFWwindow* window) {
     return true;
 }
 
-// Lists loadable skies: equirect images in assets/panoramas + assets/skybox, and cube-face folders
-static std::vector<std::string> scanSkies() {
+// Lists loadable skies: equirect images in <assets>/panoramas + <assets>/skybox, and cube-face folders
+static std::vector<std::string> scanSkies(const EngineCore& engine) {
     namespace fs = std::filesystem;
     std::vector<std::string> out;
     std::error_code ec;
-    for (const char* dir : {"assets/panoramas", "assets/skybox"}) {
+    for (const auto& dir : {engine.assetPath("panoramas"), engine.assetPath("skybox")}) {
         for (auto it = fs::directory_iterator(dir, ec); !ec && it != fs::directory_iterator(); it.increment(ec)) {
             const fs::path& p = it->path();
             std::string ext = p.extension().string();
@@ -75,7 +77,7 @@ static std::vector<std::string> scanSkies() {
 void GUI::drawSkyPanel() {
     if (!ImGui::CollapsingHeader("Sky / Panorama", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
-    static std::vector<std::string> skies = scanSkies();
+    static std::vector<std::string> skies = scanSkies(*engine_);
     static int selected = -1;
     const std::string& current = engine_->getPanoramaPath();
     if (selected < 0) {
@@ -98,7 +100,7 @@ void GUI::drawSkyPanel() {
         ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Rescan")) { skies = scanSkies(); selected = -1; }
+    if (ImGui::Button("Rescan")) { skies = scanSkies(*engine_); selected = -1; }
 
     // Manual path (folder with right/left/top/bottom/front/back, or a single equirect image)
     static char pbuf[512] = "";
@@ -130,15 +132,11 @@ void GUI::drawSkyPanel() {
     ImGui::Checkbox("Fill below horizon", &sky.horizonFill);
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hide the panorama's floor behind the horizon haze");
 
-    bool ce = engine_->getCloudEnabled();
-    if (ImGui::Checkbox("Procedural Clouds", &ce)) engine_->setCloudEnabled(ce);
-    if (ce) {
-        float cs = engine_->getCloudSpeed();
-        if (ImGui::SliderFloat("Cloud Speed", &cs, 0.0f, 0.5f)) engine_->setCloudSpeed(cs);
-        float csc = engine_->getCloudScale();
-        if (ImGui::SliderFloat("Cloud Scale", &csc, 0.2f, 4.0f)) engine_->setCloudScale(csc);
-        float cop = engine_->getCloudOpacity();
-        if (ImGui::SliderFloat("Cloud Opacity", &cop, 0.0f, 1.0f)) engine_->setCloudOpacity(cop);
+    ImGui::Checkbox("Procedural Clouds", &engine_->cloudEnabled());
+    if (engine_->cloudEnabled()) {
+        ImGui::SliderFloat("Cloud Speed", &engine_->cloudSpeed(), 0.0f, 0.5f);
+        ImGui::SliderFloat("Cloud Scale", &engine_->cloudScale(), 0.2f, 4.0f);
+        ImGui::SliderFloat("Cloud Opacity", &engine_->cloudOpacity(), 0.0f, 1.0f);
     }
 }
 
@@ -227,10 +225,10 @@ void GUI::drawGraphicsPanel() {
 void GUI::drawMapPanel() {
     if (!ImGui::CollapsingHeader("Map", ImGuiTreeNodeFlags_DefaultOpen)) return;
     int current = engine_->currentMap();
-    if (ImGui::BeginCombo("Current Map", Engine::mapName(current))) {
-        for (int i = 0; i < Engine::mapCount(); ++i) {
-            if (i == Engine::mapCount() - 1) ImGui::Separator();   // the island presets, then Sponza
-            if (ImGui::Selectable(Engine::mapName(i), i == current)) engine_->requestMap(i);
+    if (ImGui::BeginCombo("Current Map", EngineCore::mapName(current))) {
+        for (int i = 0; i < EngineCore::mapCount(); ++i) {
+            if (i == EngineCore::mapCount() - 1) ImGui::Separator();   // the island presets, then Sponza
+            if (ImGui::Selectable(EngineCore::mapName(i), i == current)) engine_->requestMap(i);
             if (i == current) ImGui::SetItemDefaultFocus();
         }
         ImGui::EndCombo();
@@ -305,7 +303,7 @@ void GUI::drawTerrainPanel() {
     if (!ImGui::CollapsingHeader("Procedural Terrain", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
     int nPresets = 0;
-    const char* const* names = TerrainParams::presetNames(nPresets);
+    const char* const* names = islandPresetNames(nPresets);
     ImGui::Combo("Preset", &preset, names, nPresets);
     ImGui::SameLine();
     if (ImGui::Button("Apply")) engine_->requestMap(preset);
@@ -335,14 +333,10 @@ void GUI::drawTerrainPanel() {
         ImGui::TreePop();
     }
     if (ImGui::TreeNode("Size")) {
-        int ts = engine_->getTerrainSize();
-        if (ImGui::InputInt("Terrain Size", &ts)) engine_->setTerrainSize(std::max(ts, 2));
-        float sc = engine_->getTerrainScale();
-        if (ImGui::InputFloat("Terrain Scale", &sc)) engine_->setTerrainScale(sc);
-        float hs = engine_->getHeightScale();
-        if (ImGui::InputFloat("Height Scale", &hs)) engine_->setHeightScale(hs);
-        float tt = engine_->getTextureTile();
-        if (ImGui::InputFloat("Texture Tile", &tt)) engine_->setTextureTile(tt);
+        if (ImGui::InputInt("Terrain Size", &engine_->terrainSize())) engine_->terrainSize() = std::max(engine_->terrainSize(), 2);
+        ImGui::InputFloat("Terrain Scale", &engine_->terrainScale());
+        ImGui::InputFloat("Height Scale", &engine_->heightScale());
+        ImGui::InputFloat("Texture Tile", &engine_->textureTile());
         ImGui::TextDisabled("Applied on Regenerate Terrain");
         ImGui::TreePop();
     }
@@ -518,7 +512,7 @@ void GUI::render() {
     ImGui::NewFrame();
 
     // HUD: swimming status and oxygen (only shown in the water)
-    if (engine_->isSwimming() || engine_->getOxygen() < 0.999f) {
+    if (engine_->hudEnabled() && (engine_->isSwimming() || engine_->getOxygen() < 0.999f)) {
         ImGui::SetNextWindowPos(ImVec2(10,10), ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(0.35f);
         ImGui::Begin("HUD", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
@@ -536,7 +530,7 @@ void GUI::render() {
         ImGui::End();
     }
 
-    drawMinimap();
+    if (engine_->hudEnabled()) drawMinimap();
 
     // Settings panel: hidden until TAB is pressed
     if (engine_->isGuiVisible()) {
@@ -587,3 +581,5 @@ void GUI::render() {
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
+
+} // namespace nut::detail

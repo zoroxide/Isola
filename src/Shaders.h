@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <GL/glew.h>
 
+namespace nut::detail {
+
 class ShaderManager {
 public:
     ShaderManager() = default;
@@ -29,3 +31,5 @@ private:
     std::unordered_map<std::string, Entry> programs_;
     std::string defines_, log_;
 };
+
+} // namespace nut::detail

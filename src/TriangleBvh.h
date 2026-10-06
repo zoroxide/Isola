@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 
+namespace nut::detail {
+
 // Bounding volume hierarchy over a static triangle soup, for CPU ray casts (light baking)
 // and overlap queries (player collision). Build once; queries are const and thread-safe.
 class TriangleBvh {
@@ -68,3 +70,5 @@ template <class Fn> void TriangleBvh::query(const glm::vec3& mn, const glm::vec3
         }
     }
 }
+
+} // namespace nut::detail

@@ -1,4 +1,4 @@
-**Procedural Terrain Generator Based Game using Moden OpenGL**
+# **Procedural Terrain Generator Based Game using Moden OpenGL (Nut)**
 A beautifull 3D Fixed Terrain Generation (Perlin Noise) based game (graphics engine with movement controls)
 Created using Modern OpenGL (GLFW, GLEW, GLM), modern C++ and finally stb_image for image handling and others..
 
@@ -49,42 +49,72 @@ Created using Modern OpenGL (GLFW, GLEW, GLM), modern C++ and finally stb_image 
   </tr>
 </table>
 
-# Demo Code
-use you own textures and Panoramas (png and HDR)
+# Using Nut as a library
+
+Nut is a C++17 library: include `<nut/Nut.hpp>`, link `nut::nut`, and the engine gives you a
+window, the world (a procedural island or the Sponza palace), a first-person player and the
+built-in settings panel. The [demo](examples/demo/main.cpp) is a complete example.
 
 ```cpp
-#include "Engine/Engine.h"
+#include <nut/Nut.hpp>
 #include <iostream>
 
-int main() {
-    Engine engine;
+int main() try {
+    nut::EngineConfig config;
+    config.window.title = "My Game";
+    config.startMap = nut::Map::Archipelago;
+    config.sky = "assets/panoramas/kloofendal_48d_partly_cloudy_puresky_4k.hdr";
 
-    // Initialize the engine (fullscreen by default). If you want windowed, pass false.
-    if (!engine.init(true)) {
-        std::cerr << "Failed to initialize engine\n";
-        return -1;
-    }
+    nut::Engine engine{config};   // throws nut::Error if it can't start
 
-    // Ground materials (grass/rock/sand/snow) load automatically from assets/textures/terrain.
-    // To force your own grass texture instead:
-    // engine.load_terrain_using_texture("assets/textures/grass.png");
+    engine.onKey([](nut::Engine& e, nut::Key key, nut::KeyAction action) {
+        if (key == nut::Key::P && action == nut::KeyAction::Press)
+            e.loadMap(nut::Map::SponzaPalace);
+    });
+    engine.onUpdate([](nut::Engine& e, const nut::FrameInfo&) {
+        if (e.player().underwater && e.player().oxygen < 0.2f)
+            e.respawn();
+    });
 
-    // Load panorama (optional). HDR panoramas also drive the sun direction, colour and fog.
-    if (!engine.panorama("assets/panoramas/kloofendal_48d_partly_cloudy_puresky_4k.hdr") &&
-        !engine.panorama("assets/skybox/sky_17_2k.png")) {
-        std::cerr << "Failed to load panorama texture\n";
-    }
-
-    // Toggle vsync if desired
-    engine.vsync(true);
-
-    // Enter the engine main loop
-    engine.mainloop();
-
-    return 0;
+    engine.run();
+} catch (const nut::Error& error) {
+    std::cerr << error.what() << '\n';
+    return 1;
 }
+```
 
+The public API (all in namespace `nut`, headers in [`include/nut`](include/nut)):
 
+| Header | Contents |
+| --- | --- |
+| `Engine.hpp` | `Engine`: main loop and callbacks, maps, sky and sun, player, graphics, settings panel |
+| `Config.hpp` | `EngineConfig`, `WindowConfig`, `ResourcePaths` (where `shaders/` and `assets/` are) |
+| `Map.hpp` | `Map` (the island presets and `SponzaPalace`), `toString`, `mapFromName` |
+| `Terrain.hpp`, `Foliage.hpp` | `TerrainParams`, `FoliageParams`: island generation, ocean, grass and trees |
+| `Graphics.hpp` | `GraphicsSettings`, `QualityTier` |
+| `Sky.hpp` | `SkySettings`, `SunSettings` |
+| `Input.hpp` | `Key`, `KeyAction` |
+| `Error.hpp`, `Version.hpp` | `Error` (the exception type), `NUT_VERSION_*` |
+
+At run time the engine needs its `shaders/` directory and the `assets/` directory (see
+`EngineConfig::paths`; by default both are looked up in the working directory).
+
+In your CMake project, either add Nut as a subdirectory or install it and use `find_package`:
+
+```cmake
+add_subdirectory(Nut)          # or: find_package(Nut 0.1 REQUIRED)
+target_link_libraries(my_game PRIVATE nut::nut)
+```
+
+### Project layout
+
+```
+include/nut/       public headers
+src/               implementation (namespace nut::detail): renderer, terrain, foliage, village, Sponza, GUI
+shaders/           GLSL shaders, loaded at run time
+assets/            textures, panoramas, the Sponza map
+examples/demo/     the demo game
+third_party/       Dear ImGui (git submodule), stb_image
 ```
 
 # Controls
@@ -135,12 +165,8 @@ the main street, looking up towards the plaza.
   walkable, and you fall off edges.
 - **Settings** (Tab -> Village): go to the village, lamps on/off, light intensity, new village.
 
-Use `build/windows/program.exe --windowed` on Windows or
-`./build/linux/program --windowed` on Linux for a windowed session (run from the
-repository root, with the platform's runtime libraries on PATH).
-`--smoke-test` checks village doorway/wall collision, renders three frames, and
-writes `build/village-smoke.ppm` for inspection. With `--map sponza` it checks the
-palace's floor and wall collision instead and writes `build/sponza-smoke.ppm`.
+Run `build/examples/nut-demo --windowed` from the repository root for a windowed session
+(`--map <name>` picks the start map, `--help` lists them).
 
 - A procedurally generated island (hills, mountains, beaches, no lakes) surrounded by an ocean
 - Ocean with Gerstner waves: walk into the sea to swim, dive to explore the sea floor,
@@ -184,78 +210,59 @@ Every push to `main` is built for Windows and Linux by GitHub Actions
 (`.github/workflows/release.yml`) and published on the
 [Releases](https://github.com/zoroxide/Nut/releases) page:
 
-- **Windows**: unzip `Nut-windows-x86_64.zip` and run `Nut.exe` (DLLs included).
-- **Linux**: extract `Nut-linux-x86_64.tar.gz` and run `nut.sh` (GLFW, GLEW and Assimp are
+- **Windows**: unzip `Nut-windows-x86_64.zip` and run `nut-demo.exe` (DLLs included).
+- **Linux**: extract `Nut-linux-x86_64.tar.gz` and run `nut-demo.sh` (GLFW, GLEW and Assimp are
   bundled; OpenGL comes from your driver). Needs glibc 2.35+ (Ubuntu 22.04 or newer).
 
 `scripts/package.sh linux|windows` builds the same packages locally (into `dist/`).
 
 # Build and installation
 
-Run all build commands from the repository root. The executable loads assets using
-relative paths, so it should also be run from there.
-
-## Windows (MSYS2 UCRT64)
-
-Install [MSYS2](https://www.msys2.org/) and open the **UCRT64** shell. Do not mix
-libraries from the MINGW64 and UCRT64 environments.
-
-Update MSYS2, then install the compiler, Make, and graphics dependencies:
+Nut builds with CMake (3.16+) and a C++17 compiler. Clone with the Dear ImGui submodule:
 
 ```sh
-pacman -Syu
-pacman -S --needed base-devel \
-  mingw-w64-ucrt-x86_64-gcc \
-  mingw-w64-ucrt-x86_64-glfw \
-  mingw-w64-ucrt-x86_64-glew \
-  mingw-w64-ucrt-x86_64-glm \
-  mingw-w64-ucrt-x86_64-assimp
-```
-
-Build and run:
-
-```sh
-make win
-make run
-```
-
-`make windows` is an alias for `make win`. The Windows executable is written to
-`build/windows/program.exe`.
-
-You may also invoke Make from PowerShell, provided `C:\msys64\ucrt64\bin` is on
-`PATH`. `make run` prioritizes this directory so that it loads the matching UCRT64
-DLLs. If MSYS2 is installed elsewhere, pass its runtime directory explicitly:
-
-```powershell
-make UCRT64_BIN=D:/path/to/msys64/ucrt64/bin run
+git clone --recursive https://github.com/zoroxide/Nut.git
+# or, in an existing clone:
+git submodule update --init
 ```
 
 ## Linux (Debian/Ubuntu)
 
-Install the build tools and dependencies:
-
 ```sh
 sudo apt update
-sudo apt install -y build-essential make pkg-config \
-  libglfw3-dev libglew-dev libglm-dev \
-  libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
-  libgl1-mesa-dev libassimp-dev
+sudo apt install -y build-essential cmake ninja-build pkg-config \
+  libglfw3-dev libglew-dev libglm-dev libassimp-dev \
+  libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/examples/nut-demo --windowed
 ```
 
-Build and run:
+## Windows (MSYS2 UCRT64)
+
+Install [MSYS2](https://www.msys2.org/) and open the **UCRT64** shell (don't mix MINGW64 and
+UCRT64 libraries):
 
 ```sh
-make linux
-make run
+pacman -Syu
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja \
+  mingw-w64-ucrt-x86_64-glfw mingw-w64-ucrt-x86_64-glew mingw-w64-ucrt-x86_64-glm mingw-w64-ucrt-x86_64-assimp
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./build/examples/nut-demo.exe --windowed
 ```
 
-The Linux executable is written to `build/linux/program`.
+Run it from the repository root (or pass `--resources <dir>`), with `C:\msys64\ucrt64\bin` on
+`PATH` for the DLLs when starting it outside the UCRT64 shell.
 
-## Clean build files
+## Options and installing
 
-On either platform, remove all generated build output with:
+| CMake option | Default | |
+| --- | --- | --- |
+| `NUT_BUILD_EXAMPLES` | ON (top level) | build `nut-demo` |
+| `NUT_INSTALL` | ON (top level) | install rules and the `find_package(Nut)` package |
+| `BUILD_SHARED_LIBS` | OFF | build `nut` as a shared library |
+| `NUT_WARNINGS_AS_ERRORS` | OFF | `-Werror` / `/WX` |
 
-```sh
-make clean
-```
-
+`cmake --install build --prefix <dir>` installs the headers, the library, the shaders
+(`share/nut/shaders`) and the CMake package (`lib/cmake/Nut`).
