@@ -9,6 +9,8 @@ CXXFLAGS = -std=c++17 -O2 -Wall -I./Engine -I./Engine/gui -I./Engine/libs/imgui 
 
 SRC = main.cpp \
       Engine/Village.cpp \
+      Engine/Sponza.cpp \
+      Engine/TriangleBvh.cpp \
       Engine/Engine.cpp \
       Engine/Camera.cpp \
       Engine/Shaders.cpp \

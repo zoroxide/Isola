@@ -23,6 +23,7 @@
 #include "Skybox.h"
 #include "Models.h"
 #include "Village.h"
+#include "Sponza.h"
 #include "Renderer.h"
 
 using Clock = std::chrono::high_resolution_clock;
@@ -128,6 +129,18 @@ private:
     GLuint villageShader_ = 0;
     GLuint villageShadowShader_ = 0;
     bool villageLamps_ = true;
+    // Maps: the island presets, then Sponza (loaded on first use)
+    int map_ = 0, pendingMap_ = -1;
+    Sponza sponza_;
+    GLuint sponzaShader_ = 0, sponzaShadowShader_ = 0;
+    float sponzaIndirect_ = 1.0f;
+    bool sponzaAutoExposure_ = true;
+    float sponzaExposure_ = 1.0f;
+    bool snapExposure_ = true;   // jump straight to the target exposure (after teleporting)
+    void updateSponzaMovement(float dt);
+    void renderSponza(const glm::mat4& view, const glm::mat4& proj, const glm::mat4& invView, const glm::mat4& invProj,
+                      const glm::mat4& VP, const glm::vec3& lightDir, const glm::vec3& lightCol, const glm::vec3& uwColor,
+                      GLuint outputFbo, int outW, int outH);
     // GPU profile / auto quality
     GpuInfo gpu_;
     bool needBenchmark_ = false, tierFromCache_ = false;
@@ -239,6 +252,21 @@ public: // Public API
     // Settings panel (Tab) visibility; the HUD and minimap are always drawn
     bool isGuiVisible() const { return guiVisible_; }
     void setGuiVisible(bool v);
+
+    // Maps: every island terrain preset, then the Sponza palace
+    static int mapCount();
+    static const char* mapName(int map);
+    int currentMap() const { return map_; }
+    bool inSponza() const;
+    // Switch map (an island preset regenerates the island; Sponza loads on first use). False on failure.
+    bool selectMap(int map);
+    // Switch on the next frame, with a loading message (for the GUI)
+    void requestMap(int map) { pendingMap_ = map; }
+    const Sponza& sponza() const { return sponza_; }
+    float& sponzaIndirect() { return sponzaIndirect_; }
+    bool& sponzaAutoExposure() { return sponzaAutoExposure_; }
+    float sponzaExposure() const { return sponzaExposure_; }
+    void teleportToSpawn();
 
     // Player / minimap
     const Terrain& terrain() const { return terrain_; }

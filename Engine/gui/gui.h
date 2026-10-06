@@ -22,8 +22,9 @@ public:
     // Render the GUI for one frame. Should be called every frame before
     // swap buffers.
     void render();
-    // A centred message drawn on top of the current frame (used while benchmarking the GPU)
-    void renderOverlayMessage(const std::string& text);
+    // A centred message drawn on top of the current frame (used while benchmarking the GPU / loading a map)
+    void renderOverlayMessage(const std::string& text,
+                              const std::string& detail = "This runs once per GPU / driver (saved in graphics.cfg).");
 
 private:
     void drawTerrainPanel();
@@ -32,6 +33,7 @@ private:
     void drawFoliagePanel();
     void drawGraphicsPanel();
     void drawVillagePanel();
+    void drawMapPanel();
     Engine* engine_;
     GLFWwindow* window_;
     bool initialized_;

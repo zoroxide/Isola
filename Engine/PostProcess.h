@@ -43,6 +43,9 @@ public:
     int framesSinceStart_ = 0;
     float scale() const { return scale_; }
     void setScale(float s) { scale_ = s; }
+    // Extra exposure on top of the graphics setting (eye adaptation indoors); rolloff compresses
+    // highlights so sunlit surfaces don't clip while the exposure is raised
+    void setAdaptation(float exposureScale, bool rolloff) { adaptExposure_ = exposureScale; rolloff_ = rolloff; }
 
 private:
     void allocate(int w, int h);
@@ -52,6 +55,8 @@ private:
     int W_ = 0, H_ = 0;             // allocated (window) size
     int sw_ = 0, sh_ = 0;           // current scene viewport
     float scale_ = 1.0f;
+    float adaptExposure_ = 1.0f;
+    bool rolloff_ = false;
     GLuint sceneFbo_ = 0, sceneColor_ = 0, sceneDepth_ = 0;
     // Quarter / eighth resolution buffers for bloom + rays
     GLuint qFbo_[3] = {}, qTex_[3] = {};   // 0: bright (a = sun ray source), 1: blur temp, 2: bloom result

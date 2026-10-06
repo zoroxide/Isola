@@ -49,3 +49,5 @@ cmake-build-*/
 # GPU benchmark result and diagnostics (per machine)
 graphics.cfg
 gpu_report.txt
+
+CLAUDE.md

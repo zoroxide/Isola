@@ -112,7 +112,7 @@ void GUI::drawSkyPanel() {
     if (sky.hasCubemap()) {
         ImGui::TextDisabled("%s panorama%s", sky.isHDR() ? "HDR" : "LDR",
                             sky.analysis().hasSun ? " - sun detected" : "");
-        ImGui::SliderFloat("Exposure", &sky.exposure, 0.02f, 8.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
+        ImGui::SliderFloat("Sky Exposure", &sky.exposure, 0.02f, 8.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
         ImGui::SameLine();
         if (ImGui::SmallButton("Auto")) sky.exposure = sky.analysis().autoExposure;
         ImGui::SliderFloat("Rotation", &sky.rotationDeg, 0.0f, 360.0f, "%.0f deg");
@@ -142,7 +142,7 @@ void GUI::drawSkyPanel() {
     }
 }
 
-void GUI::renderOverlayMessage(const std::string& text) {
+void GUI::renderOverlayMessage(const std::string& text, const std::string& detail) {
     if (!initialized_) return;
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -153,7 +153,7 @@ void GUI::renderOverlayMessage(const std::string& text) {
     ImGui::Begin("##overlay", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
                  ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav);
     ImGui::TextUnformatted(text.c_str());
-    ImGui::TextDisabled("This runs once per GPU / driver (saved in graphics.cfg).");
+    if (!detail.empty()) ImGui::TextDisabled("%s", detail.c_str());
     ImGui::End();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -224,6 +224,34 @@ void GUI::drawGraphicsPanel() {
     }
 }
 
+void GUI::drawMapPanel() {
+    if (!ImGui::CollapsingHeader("Map", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    int current = engine_->currentMap();
+    if (ImGui::BeginCombo("Current Map", Engine::mapName(current))) {
+        for (int i = 0; i < Engine::mapCount(); ++i) {
+            if (i == Engine::mapCount() - 1) ImGui::Separator();   // the island presets, then Sponza
+            if (ImGui::Selectable(Engine::mapName(i), i == current)) engine_->requestMap(i);
+            if (i == current) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    if (!engine_->inSponza()) {
+        ImGui::TextDisabled("Procedural island (a new one per seed)");
+        return;
+    }
+    const Sponza& s = engine_->sponza();
+    ImGui::TextDisabled("Crytek Sponza: %d triangles, %d materials, %d draws", s.triangleCount(), s.materialCount(),
+                        s.lastDrawCalls());
+    ImGui::SliderFloat("Bounce Light", &engine_->sponzaIndirect(), 0.0f, 3.0f);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Sunlight reflected off the walls and floor (baked; re-baked when the sun moves)");
+    if (s.bakingIndirect()) { ImGui::SameLine(); ImGui::TextDisabled("baking..."); }
+    ImGui::Checkbox("Eye adaptation", &engine_->sponzaAutoExposure());
+    ImGui::SameLine();
+    ImGui::TextDisabled("exposure x%.2f", engine_->sponzaExposure());
+    if (ImGui::Button("Back to the entrance")) engine_->teleportToSpawn();
+    ImGui::TextDisabled("Tip: Sky / Panorama -> turn off 'Sun & light from sky' to move the sun");
+}
+
 void GUI::drawVillagePanel() {
     if (!ImGui::CollapsingHeader("Village", ImGuiTreeNodeFlags_DefaultOpen)) return;
     const Village& v = engine_->village();
@@ -280,12 +308,7 @@ void GUI::drawTerrainPanel() {
     const char* const* names = TerrainParams::presetNames(nPresets);
     ImGui::Combo("Preset", &preset, names, nPresets);
     ImGui::SameLine();
-    if (ImGui::Button("Apply")) {
-        int seed = P.seed;
-        P = TerrainParams::preset(preset);
-        P.seed = seed;
-        force = true;
-    }
+    if (ImGui::Button("Apply")) engine_->requestMap(preset);
 
     ImGui::InputInt("Seed", &P.seed);
     ImGui::SameLine();
@@ -309,6 +332,18 @@ void GUI::drawTerrainPanel() {
         changed |= ImGui::SliderFloat("Coastline Roughness", &P.coastNoise, 0.0f, 1.5f);
         changed |= ImGui::SliderFloat("Ocean Depth", &P.seaDepth, 0.05f, 0.5f);
         changed |= ImGui::Checkbox("No Lakes (fill inland basins)", &P.fillLakes);
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Size")) {
+        int ts = engine_->getTerrainSize();
+        if (ImGui::InputInt("Terrain Size", &ts)) engine_->setTerrainSize(std::max(ts, 2));
+        float sc = engine_->getTerrainScale();
+        if (ImGui::InputFloat("Terrain Scale", &sc)) engine_->setTerrainScale(sc);
+        float hs = engine_->getHeightScale();
+        if (ImGui::InputFloat("Height Scale", &hs)) engine_->setHeightScale(hs);
+        float tt = engine_->getTextureTile();
+        if (ImGui::InputFloat("Texture Tile", &tt)) engine_->setTextureTile(tt);
+        ImGui::TextDisabled("Applied on Regenerate Terrain");
         ImGui::TreePop();
     }
     if (ImGui::TreeNode("Erosion")) {
@@ -363,6 +398,17 @@ void GUI::drawTerrainPanel() {
 // Minimap: bottom-left, north up, the whole island with the player's position and view direction.
 // Press M to switch between small and large.
 void GUI::drawMinimap() {
+    if (engine_->inSponza()) {   // no island map indoors: just the footer
+        ImGuiIO& io = ImGui::GetIO();
+        ImGui::SetNextWindowPos(ImVec2(14.0f, io.DisplaySize.y - 14.0f), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+        ImGui::SetNextWindowBgAlpha(0.45f);
+        ImGui::Begin("##mapfooter", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
+        ImGui::TextDisabled("Sponza Palace   Tab menu   %.0f fps", io.Framerate);
+        ImGui::End();
+        return;
+    }
     const Terrain& terrain = engine_->terrain();
     GLuint tex = terrain.minimapTexture();
     if (!tex) return;
@@ -515,6 +561,10 @@ void GUI::render() {
         }
     }
 
+    drawMapPanel();
+
+    ImGui::Separator();
+
     drawGraphicsPanel();
 
     ImGui::Separator();
@@ -523,55 +573,13 @@ void GUI::render() {
 
     ImGui::Separator();
 
-    // Terrain texture
-    char tbuf[512];
-    std::string currentT = engine_->getTerrainTexturePath();
-    strncpy(tbuf, currentT.c_str(), sizeof(tbuf)); tbuf[sizeof(tbuf)-1] = '\0';
-    if (ImGui::InputText("Terrain Texture Path", tbuf, sizeof(tbuf))) {
-        engine_->setTerrainTexturePath(std::string(tbuf));
-    }
-    if (ImGui::Button("Load Terrain Texture and Tree")) {
-        engine_->load_terrain_using_texture(engine_->getTerrainTexturePath(), "assets/Tree1/Tree1.obj");
-    }
-
-    ImGui::Separator();
-
-    // Houses controls
-    static char hpath[512] = "assets/house.obj";
-    ImGui::InputText("House OBJ Path", hpath, sizeof(hpath));
-    static float hpos[3] = {0.0f, 0.0f, 0.0f};
-    static float hscale = 1.0f;
-    ImGui::InputFloat3("House Position (x,y,z)", hpos);
-    ImGui::InputFloat("House Uniform Scale", &hscale);
-    if (ImGui::Button("Add House")) {
-        engine_->add_house(std::string(hpath), glm::vec3(hpos[0], hpos[1], hpos[2]), glm::vec3(hscale));
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Add House At Camera")) {
-        // Use current camera position with slight offset above terrain
-        // As GUI doesn't have direct camera getters, we place at origin scale; user can adjust.
-        engine_->add_house(std::string(hpath), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(hscale));
-    }
-
-    // Constants
-    int ts = engine_->getTerrainSize();
-    if (ImGui::InputInt("Terrain Size", &ts)) {
-        if (ts < 2) ts = 2;
-        engine_->setTerrainSize(ts);
-    }
-
-    float sc = engine_->getTerrainScale();
-    if (ImGui::InputFloat("Terrain Scale", &sc)) engine_->setTerrainScale(sc);
-
-    float hs = engine_->getHeightScale();
-    if (ImGui::InputFloat("Height Scale", &hs)) engine_->setHeightScale(hs);
-
-    float tt = engine_->getTextureTile();
-    if (ImGui::InputFloat("Texture Tile", &tt)) engine_->setTextureTile(tt);
+    // Everything below shapes the island
+    if (!engine_->inSponza()) {
 
     drawTerrainPanel();
     drawFoliagePanel();
     drawVillagePanel();
+    }
 
     ImGui::End();
     }

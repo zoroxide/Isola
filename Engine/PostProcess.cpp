@@ -232,7 +232,8 @@ void PostProcess::endScene(const GraphicsSettings& g, GLuint outputFbo, const gl
     glm::vec3 rayCol = sunColor * (doRays ? g.godRayIntensity * sunVisible : 0.0f);
     glUniform3fv(U(p, "rayColor"), 1, &rayCol.x);
     glUniform1f(U(p, "vignette"), g.vignette ? g.vignetteStrength : 0.0f);
-    glUniform1f(U(p, "exposure"), g.exposure);
+    glUniform1f(U(p, "exposure"), g.exposure * adaptExposure_);
+    glUniform1i(U(p, "rolloff"), rolloff_ ? 1 : 0);
     glUniform1f(U(p, "contrast"), g.contrast);
     glUniform1f(U(p, "saturation"), g.saturation);
     glUniform1f(U(p, "warmth"), g.warmth);

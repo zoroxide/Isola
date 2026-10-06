@@ -96,6 +96,24 @@ int main() {
 - **M** to switch the minimap (bottom-left) between small and large
 - **Enter** to free / capture the mouse
 
+# Maps
+
+Pick a map in the settings panel (**Tab -> Map**):
+
+- **Island maps**: Big Island, Archipelago, Mountains, Rolling Hills, Plains, Mesa / Canyons and
+  Alpine Peaks - procedurally generated terrain presets (see *World* below).
+- **Sponza Palace**: the Crytek Sponza atrium (glTF, `assets/maps/sponza`), loaded the first time
+  you open it. It uses the PBR materials (base colour, normal and metal/roughness maps,
+  alpha-tested plants and chains), a sun shadow map fitted to the building, and baked indirect light:
+  a ray-traced grid stores how much sky every point sees and how much sunlight bounces off
+  the lit walls (three bounces), and it is re-baked in the background when the sun moves.
+  Exposure adapts to the light where you stand, so the shaded galleries stay readable while
+  the sunlit courtyard rolls off softly. Walls, columns and props block you; *Map -> Bounce
+  Light* and *Eye adaptation* tune the look. With the default sky the sun only reaches the
+  upper walls; turn off *Sky / Panorama -> Sun & light from sky* and raise the sun to light the floor.
+
+Start straight into a map with `--map <name>` (any part of the name, e.g. `--map sponza`).
+
 # World
 
 The island has a procedurally planned village (CC0 materials in `assets/textures/village`).
@@ -121,7 +139,8 @@ Use `build/windows/program.exe --windowed` on Windows or
 `./build/linux/program --windowed` on Linux for a windowed session (run from the
 repository root, with the platform's runtime libraries on PATH).
 `--smoke-test` checks village doorway/wall collision, renders three frames, and
-writes `build/village-smoke.ppm` for inspection.
+writes `build/village-smoke.ppm` for inspection. With `--map sponza` it checks the
+palace's floor and wall collision instead and writes `build/sponza-smoke.ppm`.
 
 - A procedurally generated island (hills, mountains, beaches, no lakes) surrounded by an ocean
 - Ocean with Gerstner waves: walk into the sea to swim, dive to explore the sea floor,
@@ -153,6 +172,11 @@ The game adapts itself to the GPU it runs on:
 # Assets
 HDRI skies (`assets/panoramas`), terrain materials (`assets/textures/terrain`) and the bark / leaf textures
 the tree cards are baked from (`assets/textures/foliage`) are CC0 from [Poly Haven](https://polyhaven.com)
+
+The Sponza palace (`assets/maps/sponza`) is the glTF version from the
+[Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Sponza)
+(Crytek Sponza with Alexandre Pestana's PBR textures), under the CRYENGINE Limited License
+Agreement - see `assets/maps/sponza/LICENSE.md`.
   
 # Build and installation
 

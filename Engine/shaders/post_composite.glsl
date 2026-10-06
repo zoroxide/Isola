@@ -15,6 +15,7 @@ uniform int useRays;
 uniform vec3 rayColor;
 uniform float vignette;
 uniform float exposure;
+uniform int rolloff;        // soft shoulder for highlights (used with eye adaptation)
 uniform float contrast;
 uniform float saturation;
 uniform float warmth;
@@ -61,6 +62,10 @@ void main() {
 
     // Grading
     c *= exposure * vec3(1.0 + warmth, 1.0, 1.0 - warmth);
+    if (rolloff == 1) {
+        const float k = 0.65;   // values above k approach 1 smoothly instead of clipping
+        c = mix(c, k + (1.0 - k) * (1.0 - exp(-(c - k) / (1.0 - k))), step(vec3(k), c));
+    }
     c = mix(vec3(luma(c)), c, saturation);
     c = (c - 0.5) * contrast + 0.5;
     vec2 d = uv - 0.5;

@@ -57,6 +57,7 @@ Engine::Engine()
 Engine::~Engine() {
   // Cleanup
   village_.clear();
+  sponza_.clear();
   if (shaderProgram_)
     glDeleteProgram(shaderProgram_);
   if (skyShader_)
@@ -192,6 +193,10 @@ bool Engine::init(bool fullscreen) {
   villageShadowShader_ = shaders_.loadProgram("villageShadow", "Engine/shaders/village_shadow_vert.glsl",
                                             "Engine/shaders/village_shadow_frag.glsl");
   village_.init("assets/textures/village");
+  sponzaShader_ = shaders_.loadProgram("sponza", "Engine/shaders/sponza_vert.glsl",
+                                       "Engine/shaders/sponza_frag.glsl");
+  sponzaShadowShader_ = shaders_.loadProgram("sponzaShadow", "Engine/shaders/sponza_shadow_vert.glsl",
+                                             "Engine/shaders/sponza_shadow_frag.glsl");
   noiseTex_ = Textures::createNoise(256);
   waterDetailTex_ = Textures::createWaterDetail(256);
   renderer_.setPrograms(terrainShader_, shaderProgram_, skyShader_);
@@ -233,6 +238,8 @@ void Engine::refreshPrograms() {
   terrainShader_ = shaders_.get("terrainLod");
   villageShader_ = shaders_.get("village");
   villageShadowShader_ = shaders_.get("villageShadow");
+  sponzaShader_ = shaders_.get("sponza");
+  sponzaShadowShader_ = shaders_.get("sponzaShadow");
   renderer_.setPrograms(terrainShader_, shaderProgram_, skyShader_);
   sky_.setShader(skyShader_);
   sunShadow_.setProgram(sunShadowShader_);
@@ -253,6 +260,8 @@ void Engine::applyTextureQuality() {
   Textures::setAnisotropy(village_.albedoTexture(), GL_TEXTURE_2D_ARRAY, a);
   Textures::setAnisotropy(village_.normalTexture(), GL_TEXTURE_2D_ARRAY, std::max(1.0f, a * 0.5f));
   Textures::setAnisotropy(foliage_.textureArray(), GL_TEXTURE_2D_ARRAY, std::min(a, 4.0f));
+  if (sponza_.loaded())
+    sponza_.setAnisotropy(a);
 }
 
 void Engine::applyTier(int tier, const char *reason) {
@@ -277,6 +286,7 @@ void Engine::applyTier(int tier, const char *reason) {
   }
   village_.setShadowResolution(g.villageShadowRes);
   village_.setMaxHouseLights(g.maxHouseLights);
+  sponza_.setShadowResolution(g.villageShadowRes);
   applyTextureQuality();
   post_.setScale(glm::clamp(post_.scale(), g.minScale, g.maxScale));
   overBudgetTime_ = underBudgetTime_ = 0.0f;
@@ -315,7 +325,8 @@ void Engine::runGpuBenchmark() {
   float saveYaw = yaw_, savePitch = pitch_;
   bool saveSwim = swimming_, saveAuto = graphics_.autoTier;
   float saveTarget = graphics_.targetFps;
-  if (village_.active()) { cameraPos_ = village_.spawn(); yaw_ = village_.spawnYaw(); }
+  if (inSponza()) { cameraPos_ = sponza_.spawn(); yaw_ = sponza_.spawnYaw(); }
+  else if (village_.active()) { cameraPos_ = village_.spawn(); yaw_ = village_.spawnYaw(); }
   pitch_ = -4.0f;
   swimming_ = underwater_ = false;
   int fbW = 1280, fbH = 720;
@@ -531,6 +542,12 @@ void Engine::renderFrame(GLuint outputFbo, int outW, int outH) {
   float sunLum = glm::clamp(glm::dot(lightCol, glm::vec3(0.3f, 0.6f, 0.1f)), 0.25f, 1.0f);
   glm::vec3 uwColor = glm::mix(TP.waterDeep, TP.waterShallow, 0.45f) * (0.35f + 0.9f * sunLum);
 
+  post_.setAdaptation(1.0f, false);
+  if (inSponza()) {
+    renderSponza(view, proj, invView, invProj, VP, lightDir, lightCol, uwColor, outputFbo, outW, outH);
+    return;
+  }
+
   // Sun shadows: rebuilt when the sun moves (at most 4x per second while it is being dragged)
   double nowSec = glfwGetTime();
   if (graphics_.shadows)
@@ -594,6 +611,61 @@ void Engine::renderFrame(GLuint outputFbo, int outW, int outH) {
   post_.updateScale(graphics_, gpuTimers_.lastTotalMs());
 }
 
+// The Sponza map: no terrain, water, grass or village; the building is lit by the sun (shadow map)
+// and its baked sky / bounce light, then the sky fills the courtyard opening.
+void Engine::renderSponza(const glm::mat4 &view, const glm::mat4 &proj, const glm::mat4 &invView,
+                          const glm::mat4 &invProj, const glm::mat4 &VP, const glm::vec3 &lightDir,
+                          const glm::vec3 &lightCol, const glm::vec3 &uwColor, GLuint outputFbo, int outW,
+                          int outH) {
+  if (graphics_.shadows) {
+    gpuTimers_.begin("shadows");
+    sponza_.buildShadow(sponzaShadowShader_, -lightDir);
+    gpuTimers_.end();
+  }
+  sponza_.updateIndirect(lightDir);
+  gatherLights(lightCol);
+  setPerFrameUniforms(sponzaShader_, lightDir, lightCol, uwColor);
+  glUseProgram(skyShader_);
+  glUniform1i(glGetUniformLocation(skyShader_, "underwater"), 0);
+  sky_.fogColor = terrainParams_.fogColor;
+
+  post_.beginScene(outW, outH, post_.scale());
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);
+  glClearColor(0.53f, 0.8f, 1.0f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  gpuTimers_.begin("sponza");
+  sponza_.draw(sponzaShader_, view, proj, sponzaIndirect_);
+  gpuTimers_.end();
+  gpuTimers_.begin("sky");
+  sky_.setShader(skyShader_);
+  sky_.draw(invView, invProj, sky_.hasCubemap(), swimTime_, cloudEnabled_, cloudSpeed_, cloudScale_, cloudOpacity_);
+  gpuTimers_.end();
+
+  // Eye adaptation: expose for the (baked) light around the camera, so the shaded galleries read
+  // like they do to an adapted eye while the sunlit courtyard rolls off softly instead of clipping
+  float target = 1.0f;
+  if (sponzaAutoExposure_) {
+    glm::vec4 L = sponza_.lightAt(cameraPos_);
+    float sunLum = glm::dot(lightCol, glm::vec3(0.3f, 0.59f, 0.11f));
+    float level = std::max(L.x, 0.012f) * 0.55f +
+                  glm::dot(glm::vec3(L.y, L.z, L.w), glm::vec3(0.3f, 0.59f, 0.11f)) * sunLum * sponzaIndirect_;
+    target = glm::clamp(0.12f / level, 1.0f, 16.0f);
+  }
+  if (snapExposure_)
+    sponzaExposure_ = target;
+  else
+    sponzaExposure_ += (target - sponzaExposure_) * (1.0f - std::exp(-deltaTime_ * 1.5f));
+  snapExposure_ = false;
+  post_.setAdaptation(sponzaExposure_, true);
+
+  gpuTimers_.begin("post");
+  post_.endScene(graphics_, outputFbo, VP, cameraPos_, -lightDir, lightCol, false, swimTime_);
+  gpuTimers_.end();
+  post_.updateScale(graphics_, gpuTimers_.lastTotalMs());
+}
+
 void Engine::mainloop() {
   if (!window_)
     return;
@@ -607,6 +679,19 @@ void Engine::mainloop() {
     auto now = Clock::now();
     deltaTime_ = std::chrono::duration<float>(now - lastFrame_).count();
     lastFrame_ = now;
+    if (pendingMap_ >= 0) {
+      int map = pendingMap_;
+      pendingMap_ = -1;
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT);
+      if (gui_) gui_->renderOverlayMessage(std::string("Loading ") + mapName(map) + "...", "");
+      glfwSwapBuffers(window_);
+      if (!selectMap(map))
+        std::cerr << "Could not load the map " << mapName(map) << "\n";
+      lastFrame_ = Clock::now();   // don't count the loading time as a frame
+      continue;
+    }
     terrain_.setLiveParams(terrainParams_);
     updateMovement(deltaTime_);
 
@@ -729,7 +814,7 @@ void Engine::setPerFrameUniforms(GLuint prog, const glm::vec3 &lightDir,
   glUniform1f(glGetUniformLocation(prog, "fogDensity"), P.fogDensity);
   glUniform1f(glGetUniformLocation(prog, "fogHeightDensity"), graphics_.fogHeightDensity);
   glUniform1f(glGetUniformLocation(prog, "fogHeightFalloff"), graphics_.fogHeightFalloff);
-  glUniform1f(glGetUniformLocation(prog, "fogBaseY"), terrain_.getWaterY());
+  glUniform1f(glGetUniformLocation(prog, "fogBaseY"), inSponza() ? -1000.0f : terrain_.getWaterY());
   glUniform1f(glGetUniformLocation(prog, "sunGlow"), graphics_.sunGlow);
   glUniform3fv(glGetUniformLocation(prog, "viewPos"), 1, &cameraPos_.x);
   // Procedural helper textures: 8 noise, 9 water ripples
@@ -741,9 +826,15 @@ void Engine::setPerFrameUniforms(GLuint prog, const glm::vec3 &lightDir,
   glBindTexture(GL_TEXTURE_2D, waterDetailTex_);
   glActiveTexture(GL_TEXTURE0);
   // Sun shadow height map on unit 10, canopy shade on unit 6
-  sunShadow_.bind(prog, 10, terrain_.getHalfExtent(), graphics_.shadowStrength, graphics_.shadows);
-  village_.bindShadow(prog, 13, graphics_.shadowStrength, graphics_.shadows);
+  // On the Sponza map its own shadow map takes the village's place (same uniforms)
+  sunShadow_.bind(prog, 10, terrain_.getHalfExtent(), graphics_.shadowStrength, graphics_.shadows && !inSponza());
+  if (inSponza())
+    sponza_.bindShadow(prog, 13, graphics_.shadowStrength, graphics_.shadows);
+  else
+    village_.bindShadow(prog, 13, graphics_.shadowStrength, graphics_.shadows);
   village_.bindMask(prog, 14);
+  if (inSponza())
+    glUniform1i(glGetUniformLocation(prog, "hasVillageMask"), 0);
   glUniform1i(glGetUniformLocation(prog, "numPointLights"), numPointLights_);
   glUniform1i(glGetUniformLocation(prog, "numOutdoorLights"), numOutdoorLights_);
   glUniform4fv(glGetUniformLocation(prog, "pointLightPos"), 16, &pointLightPos_[0].x);
@@ -758,6 +849,10 @@ void Engine::updateMovement(float dt) {
   //   SHIFT swims faster. Oxygen drains while the head is under water.
   dt = std::min(dt, 0.1f); // avoid tunnelling after a stall
   swimTime_ += dt;
+  if (inSponza()) {
+    updateSponzaMovement(dt);
+    return;
+  }
 
   const float eyeHeight = 1.7f;
   const float floatEye = 0.35f;   // eye height above the surface while floating
@@ -874,6 +969,108 @@ void Engine::updateMovement(float dt) {
     oxygen_ = std::min(1.0f, oxygen_ + dt / 3.0f);
 }
 
+// Walking around the Sponza palace: floors from the building's geometry, walls and columns block.
+void Engine::updateSponzaMovement(float dt) {
+  const float eyeHeight = 1.7f;
+  swimming_ = underwater_ = false;
+  oxygen_ = 1.0f;
+  glm::vec3 flatFront = glm::normalize(glm::vec3(cos(glm::radians(yaw_)), 0.0f, sin(glm::radians(yaw_))));
+  glm::vec3 right = glm::normalize(glm::cross(flatFront, glm::vec3(0, 1, 0)));
+  glm::vec3 m(0.0f);
+  if (keys_[GLFW_KEY_W]) m += flatFront;
+  if (keys_[GLFW_KEY_S]) m -= flatFront;
+  if (keys_[GLFW_KEY_A]) m -= right;
+  if (keys_[GLFW_KEY_D]) m += right;
+  if (glm::length(m) > 0.0f) m = glm::normalize(m);
+  // A palace, not an island: a slower walk
+  glm::vec3 walk = m * moveSpeed_ * 0.6f * (keys_[GLFW_KEY_LEFT_SHIFT] ? SPRINT_MULTIPLIER : 1.0f) * dt;
+  int steps = std::max(1, int(std::ceil(glm::length(walk) / 0.1f)));
+  for (int step = 0; step < steps; ++step) {
+    glm::vec3 before = cameraPos_;
+    cameraPos_ += walk / float(steps);
+    sponza_.collide(cameraPos_, eyeHeight);
+    // No floor there (a hole, or a step too high to climb): stay put
+    if (sponza_.groundAt(cameraPos_.x, cameraPos_.z, cameraPos_.y - eyeHeight) < -1e8f)
+      cameraPos_ = before;
+  }
+  float ground = sponza_.groundAt(cameraPos_.x, cameraPos_.z, cameraPos_.y - eyeHeight);
+  if (!jumping_ && cameraPos_.y - eyeHeight > ground + 0.5f) {   // walked off a ledge
+    jumping_ = true;
+    jumpVel_ = 0.0f;
+  }
+  if (jumping_) {
+    if (jumpVel_ > 0.0f && sponza_.headroom(cameraPos_) < 0.15f)
+      jumpVel_ = 0.0f;   // bumped the head
+    cameraPos_.y += jumpVel_ * dt;
+    jumpVel_ -= 18.0f * dt;
+    if (cameraPos_.y <= ground + eyeHeight) {
+      cameraPos_.y = ground + eyeHeight;
+      jumping_ = false;
+      jumpVel_ = 0.0f;
+    }
+  } else {
+    // Ease up steps instead of popping
+    cameraPos_.y += (ground + eyeHeight - cameraPos_.y) * std::min(1.0f, dt * 18.0f);
+  }
+  if (cameraPos_.y < sponza_.boundsMin().y - 20.0f)
+    teleportToSpawn();   // fell out of the world
+}
+
+// ----------------- Maps -----------------
+int Engine::mapCount() {
+  int presets = 0;
+  TerrainParams::presetNames(presets);
+  return presets + 1;
+}
+
+const char *Engine::mapName(int map) {
+  int presets = 0;
+  const char *const *names = TerrainParams::presetNames(presets);
+  if (map >= 0 && map < presets)
+    return names[map];
+  return map == presets ? "Sponza Palace" : "?";
+}
+
+bool Engine::inSponza() const { return map_ == mapCount() - 1; }
+
+bool Engine::selectMap(int map) {
+  if (map < 0 || map >= mapCount())
+    return false;
+  if (map == mapCount() - 1) {
+    // Low tiers keep the textures smaller (the full set is ~70 maps of 1024 px)
+    int texSize = graphics_.tier <= 1 ? 512 : 1024;
+    if (!sponza_.load("assets/maps/sponza/Sponza.gltf", texSize, graphics_.anisotropy))
+      return false;
+    sponza_.setShadowResolution(graphics_.villageShadowRes);
+    map_ = map;
+    teleportToSpawn();
+    return true;
+  }
+  bool wasSponza = inSponza();
+  int seed = terrainParams_.seed;
+  terrainParams_ = TerrainParams::preset(map);
+  terrainParams_.seed = seed;
+  map_ = map;
+  regenerateTerrain();
+  if (wasSponza)
+    sunShadow_.invalidate();
+  return true;
+}
+
+void Engine::teleportToSpawn() {
+  if (inSponza()) {
+    cameraPos_ = sponza_.spawn();
+    yaw_ = sponza_.spawnYaw();
+    pitch_ = 4.0f;
+    snapExposure_ = true;
+    swimming_ = underwater_ = jumping_ = false;
+    jumpVel_ = 0.0f;
+    oxygen_ = 1.0f;
+  } else {
+    placePlayerOnLand();
+  }
+}
+
 // ----------------- Runtime config API -----------------
 float Engine::groundHeight(float x, float z, float feetY) const {
   return std::max(terrain_.getHeightAt(x, z), village_.groundAt(x, z, feetY));
@@ -886,7 +1083,7 @@ void Engine::gatherLights(const glm::vec3 &sunColor) {
   daylight_ = glm::smoothstep(0.3f, 0.9f, glm::dot(sunColor, glm::vec3(0.3f, 0.6f, 0.1f)));
   // In full daylight a lamp's pool of light is invisible: skip the per-pixel light loops then
   // (lantern glass still glows; interior lamps and fires are applied per house regardless)
-  if (!villageLamps_ || !village_.active() || daylight_ > 0.8f) return;
+  if (inSponza() || !villageLamps_ || !village_.active() || daylight_ > 0.8f) return;
   const auto &all = village_.lights();
   std::vector<std::pair<float, int>> order;
   for (int i = 0; i < (int)all.size(); ++i) {
