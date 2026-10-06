@@ -284,9 +284,10 @@ bool Sponza::load(const std::string& gltfPath, int maxTextureSize, float anisotr
     // --- Materials: collect the textures, decode them on all cores, then upload ---
     struct Request { std::string path; int kind; Image image; };
     std::vector<Request> requests;
-    auto request = [&](const aiMaterial* m, aiTextureType type, int kind) -> int {
+    // (type, index) pairs, so Assimp's AI_MATKEY_*_TEXTURE macros can be passed directly
+    auto request = [&](const aiMaterial* m, aiTextureType type, unsigned index, int kind) -> int {
         aiString p;
-        if (m->GetTexture(type, 0, &p) != AI_SUCCESS) return -1;
+        if (m->GetTexture(type, index, &p) != AI_SUCCESS) return -1;
         std::string path = dir + p.C_Str();
         for (size_t i = 0; i < requests.size(); ++i)
             if (requests[i].path == path && requests[i].kind == kind) return (int)i;
@@ -298,10 +299,10 @@ bool Sponza::load(const std::string& gltfPath, int maxTextureSize, float anisotr
     for (unsigned i = 0; i < scene->mNumMaterials; ++i) {
         const aiMaterial* m = scene->mMaterials[i];
         Material& M = materials_[i];
-        int a = request(m, aiTextureType_BASE_COLOR, ALBEDO);
-        if (a < 0) a = request(m, aiTextureType_DIFFUSE, ALBEDO);
-        matTex[i] = glm::ivec3(a, request(m, aiTextureType_NORMALS, NORMAL),
-                               request(m, aiTextureType_GLTF_METALLIC_ROUGHNESS, METAL_ROUGH));
+        int a = request(m, aiTextureType_BASE_COLOR, 0, ALBEDO);
+        if (a < 0) a = request(m, aiTextureType_DIFFUSE, 0, ALBEDO);
+        matTex[i] = glm::ivec3(a, request(m, aiTextureType_NORMALS, 0, NORMAL),
+                               request(m, AI_MATKEY_GLTF_PBRMETALLICROUGHNESS_METALLICROUGHNESS_TEXTURE, METAL_ROUGH));
         aiColor4D base(1, 1, 1, 1);
         if (m->Get(AI_MATKEY_BASE_COLOR, base) != AI_SUCCESS) m->Get(AI_MATKEY_COLOR_DIFFUSE, base);
         M.baseColor = glm::vec4(base.r, base.g, base.b, base.a);

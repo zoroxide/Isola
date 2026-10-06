@@ -51,3 +51,6 @@ graphics.cfg
 gpu_report.txt
 
 CLAUDE.md
+
+# Release packages (scripts/package.sh)
+dist/

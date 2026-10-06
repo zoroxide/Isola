@@ -1,0 +1,121 @@
+# On every push to main: build the game for Linux and Windows, package each build with the
+# libraries / DLLs it needs plus shaders and assets (scripts/package.sh), and publish both
+# packages as a new GitHub release. Add [skip ci] to a commit message to skip it.
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create releases and tags
+
+# Releases are created one at a time, in commit order
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    name: Linux build
+    # The oldest supported runner: the binary then runs on this glibc and anything newer
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential make pkg-config patchelf \
+            libglfw3-dev libglew-dev libglm-dev libassimp-dev \
+            libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Build
+        run: make linux
+
+      - name: Package
+        run: scripts/package.sh linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/Nut-linux-x86_64.tar.gz
+          retention-days: 7
+
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            zip
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-glfw
+            mingw-w64-ucrt-x86_64-glew
+            mingw-w64-ucrt-x86_64-glm
+            mingw-w64-ucrt-x86_64-assimp
+
+      # OS is overridden so the Makefile uses MSYS2's POSIX shell instead of cmd.exe
+      - name: Build
+        run: make win OS=MSYS
+
+      - name: Package
+        run: scripts/package.sh windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/Nut-windows-x86_64.zip
+          retention-days: 7
+
+  release:
+    name: Publish release
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          short="${GITHUB_SHA::7}"
+          tag="build-${GITHUB_RUN_NUMBER}"
+          {
+            echo "Automatic build of ${short} on \`${GITHUB_REF_NAME}\`."
+            echo
+            if [ -n "$COMMIT_MESSAGE" ]; then
+              echo '```'
+              echo "$COMMIT_MESSAGE"
+              echo '```'
+              echo
+            fi
+            echo "**Windows:** unzip \`Nut-windows-x86_64.zip\` and run \`Nut.exe\` (or \`Nut (windowed).bat\`)."
+            echo
+            echo "**Linux:** \`tar xzf Nut-linux-x86_64.tar.gz\` and run \`Nut-linux-x86_64/nut.sh\` (add \`--windowed\` for a window)."
+            echo "Needs an OpenGL 3.3 driver and glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+)."
+          } > notes.md
+          gh release create "$tag" dist/Nut-linux-x86_64.tar.gz dist/Nut-windows-x86_64.zip \
+            --target "$GITHUB_SHA" \
+            --title "Build ${GITHUB_RUN_NUMBER} (${short})" \
+            --notes-file notes.md \
+            --latest

@@ -178,6 +178,18 @@ The Sponza palace (`assets/maps/sponza`) is the glTF version from the
 (Crytek Sponza with Alexandre Pestana's PBR textures), under the CRYENGINE Limited License
 Agreement - see `assets/maps/sponza/LICENSE.md`.
   
+# Download
+
+Every push to `main` is built for Windows and Linux by GitHub Actions
+(`.github/workflows/release.yml`) and published on the
+[Releases](https://github.com/zoroxide/Nut/releases) page:
+
+- **Windows**: unzip `Nut-windows-x86_64.zip` and run `Nut.exe` (DLLs included).
+- **Linux**: extract `Nut-linux-x86_64.tar.gz` and run `nut.sh` (GLFW, GLEW and Assimp are
+  bundled; OpenGL comes from your driver). Needs glibc 2.35+ (Ubuntu 22.04 or newer).
+
+`scripts/package.sh linux|windows` builds the same packages locally (into `dist/`).
+
 # Build and installation
 
 Run all build commands from the repository root. The executable loads assets using
